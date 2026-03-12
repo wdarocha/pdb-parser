@@ -1,0 +1,44 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the following preprint:"
+authors:
+  - family-names: "da Rocha"
+    given-names: "Wagner A. A."
+  - family-names: "Lavor"
+    given-names: "Carlile"
+  - family-names: "Liberti"
+    given-names: "Leo"
+  - family-names: "de Melo Costa"
+    given-names: "Leticia"
+  - family-names: "Secchin"
+    given-names: "Leonardo D."
+  - family-names: "Malliavin"
+    given-names: "Therese E."
+title: "An Angle-Based Algorithmic Framework for the Interval Discretizable Distance Geometry Problem"
+version: "1.0.0"
+date-released: 2025-08-20
+identifiers:
+  - type: url
+    value: "https://arxiv.org/abs/2508.09143"
+  - type: arXiv
+    value: "2508.09143"
+preferred-citation:
+  type: article
+  title: "An Angle-Based Algorithmic Framework for the Interval Discretizable Distance Geometry Problem"
+  authors:
+    - family-names: "da Rocha"
+      given-names: "Wagner A. A."
+    - family-names: "Lavor"
+      given-names: "Carlile"
+    - family-names: "Liberti"
+      given-names: "Leo"
+    - family-names: "de Melo Costa"
+      given-names: "Leticia"
+    - family-names: "Secchin"
+      given-names: "Leonardo D."
+    - family-names: "Malliavin"
+      given-names: "Therese E."
+  year: 2025
+  journal: "arXiv preprint"
+  doi: ""
+  url: "https://arxiv.org/abs/2508.09143"
+
