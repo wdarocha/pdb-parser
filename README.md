@@ -101,16 +101,10 @@ Synthetic intervals centered around the reference distance.
 $$
 \mathcal{D}_{ij} =
 \left[
-\max\!\left(d_{ij} - \frac{\varepsilon_{ij}}{2},\ \text{vdw\_threshold}\right),
+\max\!\left(d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ v_{\mathrm{dw}}\right),
 \;
-\min\!\left(d_{ij} + \frac{\varepsilon_{ij}}{2},\ \text{max\_distance}\right)
+\min\!\left(d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ d_{\max}\right)
 \right]
-$$
-
-where
-
-$$
-d_{ij}^* \sim \mathcal{N}\!\left(d_{ij},\left(\frac{\varepsilon_{ij}}{8}\right)^2\right)
 $$
 
 ## Experimental NOE intervals
@@ -130,18 +124,23 @@ Distance bounds derived from NOESY peak intensity classes:
 Torsion angles are derived from the PDB structure and converted into
 intervals.
 
-Given a reference torsion angle \tau_i, a perturbed value is sampled as
+Given a reference torsion angle $\tau_i$, a perturbed value is sampled as
 
 $$
-\tau_i^* \sim \mathcal{N}\!\left(\tau_i,\left(\frac{\text{torsion\_angle\_width}}{8}\right)^2\right)
+\tau_i^* \sim \mathcal{N}\!\left(\tau_i,\left(\frac{\omega}{8}\right)^2\right)
 $$
 
 and the resulting interval is
 
 $$
-\left[\tau_i^* - \frac{\text{torsion\_angle\_width}}{2},\ 
-      \tau_i^* + \frac{\text{torsion\_angle\_width}}{2}\right].
+\left[
+\tau_i^* - \frac{\omega}{2},
+\;
+\tau_i^* + \frac{\omega}{2}
+\right],
 $$
+
+where $\omega$ corresponds to the parameter `torsion_angle_width`.
 
 ------------------------------------------------------------------------
 
