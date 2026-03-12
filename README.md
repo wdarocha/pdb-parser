@@ -102,8 +102,8 @@ $$
 \mathcal{D}_{ij} =
 \left[
 \max\left(d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ v_{\mathrm{dw}}\right),
-\;
-\min\left(d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ 5 \ \text{\AA}\right)
+\
+\min\left(d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ 5 \ \AA\right)
 \right]
 $$
 
