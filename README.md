@@ -7,15 +7,13 @@ tailored for **Distance Geometry Problem (DGP)** workflows.
 The package extracts structural information from PDB files and produces
 constraint sets that can be used in algorithms for protein structure
 determination, including **Discretizable Distance Geometry Problem (DDGP
-/ iDDGP)** frameworks.
+/ _i_DDGP)** frameworks.
 
 Typical applications include:
 
 -   generation of **distance-constraint lists**
--   extraction of **backbone torsion angles**
--   preparation of datasets for **branch-and-prune distance geometry
-    algorithms**
--   preprocessing of **NMR-derived structural information**
+-   generation of **backbone torsion angles**
+-   extraction of **3D coordinates**
 
 ------------------------------------------------------------------------
 
@@ -146,7 +144,7 @@ where $\Delta\tau_i$ corresponds to the parameter `torsion_angle_width`.
 
 ------------------------------------------------------------------------
 
-## ⚙️ Build Instructions
+## ⚙️ Installation instructions
 
 Clone the repository:
 
@@ -166,10 +164,9 @@ PDB identifiers in `data/pdb_ids.txt`, run the parsing pipeline.
 
 Example:
 
-``` python
-from pdb_parser.pipeline import parser_pipeline
+``` 
+python3 src/pdb_parser/pdb_parser.py data/pdb_ids.txt data/params.cfg data/pdb data/outputs
 
-parser_pipeline.run()
 ```
 
 ------------------------------------------------------------------------
