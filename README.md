@@ -129,7 +129,7 @@ intervals.
 Given a reference torsion angle $\tau_i$, a perturbed value is sampled as
 
 $$
-\tau_i^* \sim \mathcal{N}\left(\tau_i,\left(\frac{\omega}{8}\right)^2\right)
+\tau_i^* \sim \mathcal{N}\left(\tau_i,\left(\frac{\Delta\tau_i}{8}\right)^2\right)
 $$
 
 and the resulting interval is
