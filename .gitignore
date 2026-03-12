@@ -72,7 +72,7 @@ htmlcov/
 # -----------------------------
 # Data files (optional)
 # -----------------------------
-data/output/*
-!data/output/.gitkeep
+data/outputs/*
+!data/outputs/.gitkeep
 data/pdb/*
 !data/pdb/.gitkeep
