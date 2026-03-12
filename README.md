@@ -101,11 +101,13 @@ Synthetic intervals centered around the reference distance.
 $$
 \mathcal{D}_{ij} =
 \left[
-\max\!\left(d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ v_{\mathrm{dw}}\right),
+\max\left\{d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ v_{\mathrm{dw}}\right\},
 \;
-\min\!\left(d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ d_{\max}\right)
+\min\left\{d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ d_{\max}\right\}
 \right]
 $$
+
+where $\varepsilon_{ij}$ corresponds to the parameter `interval_width`.
 
 ## Experimental NOE intervals
 
@@ -127,20 +129,20 @@ intervals.
 Given a reference torsion angle $\tau_i$, a perturbed value is sampled as
 
 $$
-\tau_i^* \sim \mathcal{N}\!\left(\tau_i,\left(\frac{\omega}{8}\right)^2\right)
+\tau_i^* \sim \mathcal{N}\left(\tau_i,\left(\frac{\omega}{8}\right)^2\right)
 $$
 
 and the resulting interval is
 
 $$
 \left[
-\tau_i^* - \frac{\omega}{2},
+\tau_i^* - \frac{\Delta\tau_i}{2},
 \;
-\tau_i^* + \frac{\omega}{2}
+\tau_i^* + \frac{\Delta\tau_i}{2}
 \right],
 $$
 
-where $\omega$ corresponds to the parameter `torsion_angle_width`.
+where $\Delta\tau_i$ corresponds to the parameter `torsion_angle_width`.
 
 ------------------------------------------------------------------------
 
