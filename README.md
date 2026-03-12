@@ -113,11 +113,11 @@ where $\varepsilon_{ij}$ corresponds to the parameter `interval_width`.
 
 Distance bounds derived from NOESY peak intensity classes:
 
-  NOE class   upper bound
-  ----------- -------------
-  strong      2.5 Å
-  medium      3.5 Å
-  weak        5.0 Å
+| NOE class | upper bound |
+|-----------|-------------|
+| strong | 2.5 Å |
+| medium | 3.5 Å |
+| weak | 5.0 Å |
 
 ------------------------------------------------------------------------
 
@@ -137,7 +137,7 @@ and the resulting interval is
 $$
 \left[
 \tau_i^* - \frac{\Delta\tau_i}{2},
-\;
+\
 \tau_i^* + \frac{\Delta\tau_i}{2}
 \right],
 $$
