@@ -101,9 +101,9 @@ Synthetic intervals centered around the reference distance.
 $$
 \mathcal{D}_{ij} =
 \left[
-\max\left\{d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ v_{\mathrm{dw}}\right\},
+\max\Big\{d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ v_{\mathrm{dw}}\Big\},
 \;
-\min\left\{d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ 5 \ \mathrm{\AA}\right\}
+\min\Big\{d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ 5 \ \mathrm{\AA}\Big\}
 \right]
 $$
 
