@@ -36,6 +36,7 @@ Typical applications include:
     │
     ├── pyproject.toml
     ├── README.md
+    ├── CITATION.cff
     └── .gitignore
 
 ------------------------------------------------------------------------
@@ -97,12 +98,20 @@ Distances extracted directly from the PDB structure.
 
 Synthetic intervals centered around the reference distance.
 
-D_ij = \[max(d\*\_ij - ε_ij/2 , vdw_threshold), min(d\*\_ij + ε_ij/2 ,
-max_distance)\]
+$$
+\mathcal{D}_{ij} =
+\left[
+\max\!\left(d_{ij} - \frac{\varepsilon_{ij}}{2},\ \text{vdw\_threshold}\right),
+\;
+\min\!\left(d_{ij} + \frac{\varepsilon_{ij}}{2},\ \text{max\_distance}\right)
+\right]
+$$
 
 where
 
-d\*\_ij \~ N(d_ij , (ε_ij / 8)\^2)
+$$
+d_{ij}^* \sim \mathcal{N}\!\left(d_{ij},\left(\frac{\varepsilon_{ij}}{8}\right)^2\right)
+$$
 
 ## Experimental NOE intervals
 
@@ -121,13 +130,18 @@ Distance bounds derived from NOESY peak intensity classes:
 Torsion angles are derived from the PDB structure and converted into
 intervals.
 
-Given a reference torsion angle τ_ij, a perturbed value is sampled as
+Given a reference torsion angle \tau_i, a perturbed value is sampled as
 
-τ\*\_ij \~ N(τ_ij , (torsion_angle_width / 8)\^2)
+$$
+\tau_i^* \sim \mathcal{N}\!\left(\tau_i,\left(\frac{\text{torsion\_angle\_width}}{8}\right)^2\right)
+$$
 
 and the resulting interval is
 
-\[τ\*\_ij − torsion_angle_width/2 , τ\*\_ij + torsion_angle_width/2\]
+$$
+\left[\tau_i^* - \frac{\text{torsion\_angle\_width}}{2},\ 
+      \tau_i^* + \frac{\text{torsion\_angle\_width}}{2}\right].
+$$
 
 ------------------------------------------------------------------------
 
