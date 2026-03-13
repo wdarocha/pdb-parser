@@ -239,10 +239,10 @@ interval constraints is controlled by
 
     percentage_backbone_torsion_angles: 100.0
 
-  value    behavior
-  -------- -------------------------------------------
-  `100`    all backbone torsion angles are used
-  `<100`   a random subset of torsion angles is used
+| value | behavior |
+|------|----------|
+| `100` | all backbone torsion angles are used |
+| `<100` | a random subset of torsion angles is used |
 
 Angles that are **not selected** receive the default range
 
