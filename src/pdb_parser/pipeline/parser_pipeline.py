@@ -76,20 +76,36 @@ def parser(
 	# Distance constraints 4: NMR (NOE) constraints
 	# ------------------------------------------------------------------
 	dcfile_4 = tmp_dir / "distance_constraints_4.dat"
-
-	nmr_distance_constraints(
-		tsv_structure_file,
-		dcfile_4,
-		params.get("distance_constraints", "").strip().lower(),
-		params.get("atom_selection", "").strip().lower(),
-		float(params["epsilon_short"]),
-		float(params["epsilon_long"]),
-		float(params["max_distance"]),
-		float(params["noe_strong"]),
-		float(params["noe_medium"]),
-		float(params["noe_weak"]),
-		float(params["vdw_threshold"]),
-	)
+	
+	distance_constraints = params.get("distance_constraints", "").strip().lower()
+	if distance_constraints == "interval_centered":
+		nmr_distance_constraints(
+			tsv_structure_file,
+			dcfile_4,
+			distance_constraints,
+			params.get("atom_selection", "").strip().lower(),
+			float(params["epsilon_short"]),
+			float(params["epsilon_long"]),
+			float(params["max_distance"]),
+			None,
+			None,
+			None,
+			float(params["vdwr_hh"]),
+		)
+	else:
+		nmr_distance_constraints(
+			tsv_structure_file,
+			dcfile_4,
+			distance_constraints,
+			params.get("atom_selection", "").strip().lower(),
+			None,
+			None,
+			None,
+			float(params["noe_strong"]),
+			float(params["noe_medium"]),
+			float(params["noe_weak"]),
+			float(params["vdwr_hh"]),
+		)
 
 	# ------------------------------------------------------------------
 	# Angular constraints (TALOS-like)
