@@ -61,21 +61,12 @@ The parser is executed as
 
 The arguments are:
 
-  -----------------------------------------------------------------------
-  argument                            description
-  ----------------------------------- -----------------------------------
-  `data/pdb_ids.txt`                  text file containing the list of
-                                      PDB identifiers to process
-
-  `data/params.cfg`                   configuration file controlling the
-                                      parser behavior
-
-  `data/pdb`                          directory where PDB structures will
-                                      be stored
-
-  `data/outputs`                      directory where the generated
-                                      constraint files will be written
-  -----------------------------------------------------------------------
+| argument | description |
+|----------|-------------|
+| `data/pdb_ids.txt` | text file containing the list of PDB identifiers to process |
+| `data/params.cfg` | configuration file controlling the parser behavior |
+| `data/pdb` | directory where PDB structures will be stored |
+| `data/outputs` | directory where the generated constraint files will be written |
 
 ------------------------------------------------------------------------
 
@@ -127,13 +118,9 @@ Defines which atoms are extracted from the PDB structure.
 
 Currently supported option:
 
-  -----------------------------------------------------------------------
-  option                              description
-  ----------------------------------- -----------------------------------
-  `backbone_plus_hydrogens`           backbone atoms (N, CA, C) plus
-                                      hydrogens directly bonded to them
-
-  -----------------------------------------------------------------------
+| option | description |
+|-------|-------------|
+| `backbone_plus_hydrogens` | backbone atoms (N, CA, C) plus hydrogens directly bonded to them |
 
 ------------------------------------------------------------------------
 
@@ -157,7 +144,7 @@ When using
 distance intervals are generated around the reference distance extracted
 from the PDB.
 
-The reference distance is perturbed as
+The reference distance, $d_{ij}$, is perturbed as
 
 $$
 d_{ij}^* \sim \mathcal{N}\left(d_{ij},\left(\frac{\varepsilon_{ij}}{8}\right)^2\right)
@@ -188,21 +175,12 @@ residues.
     min_distance: 2.4
     max_distance: 5.0
 
-  -----------------------------------------------------------------------
-  parameter                           meaning
-  ----------------------------------- -----------------------------------
-  `epsilon_short`                     interval width for atoms in the
-                                      same or adjacent residues
-
-  `epsilon_long`                      interval width for atoms in
-                                      non-adjacent residues
-
-  `min_distance`                      minimum allowed lower bound for
-                                      distance intervals
-
-  `max_distance`                      maximum allowed upper bound for
-                                      distance intervals
-  -----------------------------------------------------------------------
+| parameter | meaning |
+|-----------|---------|
+| `epsilon_short` | interval width for atoms in the same or adjacent residues |
+| `epsilon_long` | interval width for atoms in non-adjacent residues |
+| `min_distance` | minimum allowed lower bound for distance intervals |
+| `max_distance` | maximum allowed upper bound for distance intervals |
 
 Suggested values are
 
@@ -221,10 +199,10 @@ included.
 
 Options:
 
-  value   meaning
-  ------- -----------------------------------------------
-  `yes`   include van der Waals lower-bound constraints
-  `no`    ignore van der Waals constraints
+| value | meaning |
+|------|---------|
+| `yes` | include van der Waals lower-bound constraints |
+| `no`  | ignore van der Waals constraints |
 
 ------------------------------------------------------------------------
 
@@ -233,7 +211,7 @@ Options:
 Torsion angles are derived from the PDB structure and converted into
 intervals.
 
-Given a reference torsion angle $\tau_{ij}$, a perturbed value is
+Given a reference torsion angle $\tau_{i}$, taken from the PDB structure, a perturbed value is
 sampled as
 
 $$
@@ -269,7 +247,7 @@ interval constraints is controlled by
 Angles that are **not selected** receive the default range
 
 $$
-[-180^\circ,\ 180^\circ]
+(-180^{\circ},\ 180^{\circ}\]
 $$
 ------------------------------------------------------------------------
 
