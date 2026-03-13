@@ -248,7 +248,7 @@ Angles that are **not selected** receive the default range
 
 $$
 \left[
--180^{\circ},\ 180^{\circ}
+-180^{o},\ 180^{o}
 \right]
 $$
 ------------------------------------------------------------------------
