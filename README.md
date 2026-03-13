@@ -140,7 +140,7 @@ $$
 \left[
 \max\left(d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ v_{\mathrm{vdWrHH}}\right),
 \
-\min\left(d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ 5 \ \mathrm{Å}\right)
+\min\left(d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ d_{\mathrm{max}}\right)
 \right]
 $$
 
