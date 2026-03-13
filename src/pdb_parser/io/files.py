@@ -1,5 +1,6 @@
 from pathlib import Path
 import pandas as pd
+import numpy as np
 
 # -----------------------------------------------------------------------------------------------------
 def read_space_separated_file(
@@ -90,4 +91,30 @@ def save_coordinates_from_df_structure(
 			)
 
 	print(f"[OK] Coordinate file saved to: {filepath}")
+# -----------------------------------------------------------------------------------------------------
+def save_cliques_from_matrix_T(
+	T: np.ndarray, 
+	filepath: str
+) -> None:
+	"""
+	Save matrix T to a file with a specific column format.
+
+	Expected column format
+	----------------------
+	%d %d %d %d %d %.4f %.4f
+
+	Parameters
+	----------
+	T : np.ndarray
+		Matrix with shape (n_rows, 7).
+	filepath : str
+		Path to the output file.
+	"""
+
+	# Format specification for each column
+	fmt = "%d %d %d %d %d %.4f %.4f"
+
+	# Save matrix efficiently
+	np.savetxt(filepath, T, fmt=fmt)
+	print(f"[OK] Cliques file saved to: {filepath}")
 # -----------------------------------------------------------------------------------------------------

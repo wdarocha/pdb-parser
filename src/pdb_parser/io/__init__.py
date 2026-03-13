@@ -34,6 +34,7 @@ from .files import (
 	read_space_separated_file,
 	save_coordinates_from_df_structure,
 	save_distances_from_df_structure,
+	save_cliques_from_matrix_T,
 )
 
 __all__ = [
@@ -58,4 +59,5 @@ __all__ = [
 	"read_space_separated_file",
 	"save_coordinates_from_df_structure",
 	"save_distances_from_df_structure",
+	"save_cliques_from_matrix_T",
 ]

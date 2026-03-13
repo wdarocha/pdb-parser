@@ -9,10 +9,12 @@ from .vertex_ordering import (
 	first_residue_order,
 	sort_structure_dataframe,
 	sort_distance_dataframe,
-	sort_instance,
 	build_ddgp_pattern_entries,
-	#reorder_atom_lists,
-	#reorder_distance_constraints,
+	build_available_atoms,
+	build_first_residue_pattern,
+	build_atom_clique_index_matrix,
+	#,
+	#,
 )
 
 __all__ = [
@@ -22,8 +24,10 @@ __all__ = [
 	"first_residue_order",
 	"sort_structure_dataframe",
 	"sort_distance_dataframe",
-	"sort_instance",
 	"build_ddgp_pattern_entries",
-	#"reorder_atom_lists",
-	#"reorder_distance_constraints",
+	"build_available_atoms",
+	"build_first_residue_pattern",
+	"build_atom_clique_index_matrix",
+	#"",
+	#"",
 ]

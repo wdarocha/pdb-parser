@@ -3,6 +3,7 @@ from pathlib import Path
 
 from pdb_parser.utils import *
 from pdb_parser.io import *
+from pdb_parser.reordering import *
 
 def parser(
 	params: dict[str, object],
@@ -129,3 +130,110 @@ def parser(
 	# ------------------------------------------------------------------
 	if remove_tmp_dir and tmp_dir.exists():
 		shutil.rmtree(tmp_dir)
+# -----------------------------------------------------------------------------------------------------
+def sort_instance(
+	params: dict[str, object],
+	out_dir: str | Path,
+	pdb_id: str,
+	ddgp_order_vec: int,
+) -> int:
+	"""
+	Read the structure and distance files, compute the DDGP vertex ordering,
+	sort the data accordingly, and save the sorted files.
+
+	The function returns a skip_flag (0 or 1) indicating whether the
+	structure should be skipped.
+	"""
+
+	out_dir_pdb_id = Path(out_dir) / pdb_id
+	chosen_model = int(params["model_number"])
+	chosen_chain = str(params["chain_id"])
+			
+	Xfile = out_dir_pdb_id / f"X_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"
+	Afile = out_dir_pdb_id / f"A_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"
+	Ifile = out_dir_pdb_id / f"I_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"			
+	# ------------------------------------------------------------------
+	# Read input files
+	# ------------------------------------------------------------------
+	df_X = read_space_separated_file(Xfile)
+	df_I = read_space_separated_file(Ifile)
+	df_A = read_space_separated_file(Afile)
+
+	skip_flag = 0
+
+	# ------------------------------------------------------------------
+	# Determine number of residues
+	# ------------------------------------------------------------------
+	n = df_X.shape[0]
+	nres = int(df_X.iat[n - 1, 2])
+
+	new_order: list[tuple[int, str]] = []
+
+	# ------------------------------------------------------------------
+	# Build the new atom ordering residue by residue
+	# ------------------------------------------------------------------
+	for k in range(nres):
+
+		resnum_i = k + 1
+		df_X_i = df_X[df_X[2] == resnum_i]
+
+		skip_flag = validate_backbone_plus_hydrogens_residue(df_X_i, resnum_i, pdb_id, chosen_model, chosen_chain)
+
+		if skip_flag == 1:
+			break
+
+		# First residue uses a special ordering
+		if k == 0:
+			new_order.extend(first_residue_order(df_X_i))
+
+		# Internal residues use the DDGP ordering
+		else:
+			new_order.extend(get_internal_residue_numeric_order(df_X_i, ddgp_order_vec[k]))
+
+	# ------------------------------------------------------------------
+	# Exit early if the structure is invalid
+	# ------------------------------------------------------------------
+	if skip_flag == 1:
+		return skip_flag
+
+	# ------------------------------------------------------------------
+	# Sort structure and distance data
+	# ------------------------------------------------------------------
+	atom_ids_new_order = [atom_id for atom_id, _ in new_order]
+		
+	df_Xreord = sort_structure_dataframe(df_X, atom_ids_new_order)
+
+	df_Ireord = sort_distance_dataframe(df_I, atom_ids_new_order)
+	
+	atom_names_new_order = [atom_name for _, atom_name in new_order]
+
+	# ------------------------------------------------------------------
+	# Build the atom cliques residue by residue
+	# ------------------------------------------------------------------
+	atom_cliques: list[tuple[list[tuple[int, str]], int]] = []
+
+	available_atoms = build_available_atoms(df_Xreord)
+
+	for k in range(nres):
+		if k == 0:
+			atom_cliques.extend(build_first_residue_pattern(available_atoms))
+		else:
+			atom_cliques.extend(build_ddgp_pattern_entries(ddgp_order_vec[k], k + 1, available_atoms))
+
+	T = build_atom_clique_index_matrix(atom_cliques, df_Xreord, df_A, df_Ireord)
+
+	# ------------------------------------------------------------------
+	# Save sorted files
+	# ------------------------------------------------------------------
+	out_dir_pdb_id_sorted = Path(out_dir_pdb_id) / "sorted"
+	ensure_dir(out_dir_pdb_id_sorted)
+	
+	Xfile = out_dir_pdb_id_sorted / f"X_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"
+	Ifile = out_dir_pdb_id_sorted / f"I_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"
+	Tfile = out_dir_pdb_id_sorted / f"T_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"
+	
+	save_distances_from_df_structure(df_Ireord, Ifile)
+	save_coordinates_from_df_structure(df_Xreord, Xfile)
+	save_cliques_from_matrix_T(T, Tfile)
+
+	return skip_flag
