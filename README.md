@@ -39,7 +39,7 @@ Typical applications include:
 
 ------------------------------------------------------------------------
 
-# 📂 Input configuration
+## 📂 Input configuration
 
 The behavior of the parser is controlled by a configuration file located
 at
@@ -53,7 +53,7 @@ Below is a complete description of all parameters currently supported.
 
 ------------------------------------------------------------------------
 
-# Running the parser
+### Running the parser
 
 The parser is executed as
 
