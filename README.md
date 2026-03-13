@@ -51,8 +51,6 @@ geometric constraints used in the pipeline are generated.
 
 Below is a complete description of all parameters currently supported.
 
-------------------------------------------------------------------------
-
 ### Running the parser
 
 The parser is executed as
@@ -70,7 +68,7 @@ The arguments are:
 
 ------------------------------------------------------------------------
 
-# PDB list
+### PDB list
 
 The file
 
@@ -88,9 +86,9 @@ processed by the pipeline.
 
 ------------------------------------------------------------------------
 
-# Configuration parameters (`params.cfg`)
+### Configuration parameters (`params.cfg`)
 
-## Model selection
+#### Model selection
 
 Selects which model from the PDB structure will be used.
 
@@ -100,7 +98,7 @@ Model numbering follows the PDB convention and is **1-based**.
 
 ------------------------------------------------------------------------
 
-## Chain selection
+#### Chain selection
 
 Specifies which chain in the selected model will be processed.
 
@@ -110,7 +108,7 @@ Only atoms belonging to this chain are considered.
 
 ------------------------------------------------------------------------
 
-## Atom selection strategy
+#### Atom selection strategy
 
 Defines which atoms are extracted from the PDB structure.
 
@@ -124,7 +122,7 @@ Currently supported option:
 
 ------------------------------------------------------------------------
 
-# Distance constraint model
+### Distance constraint model
 
 Defines how **NMR-derived distance constraints** are generated.
 
@@ -135,7 +133,7 @@ distances are always treated as precise**.
 
 ------------------------------------------------------------------------
 
-## Synthetic distance intervals
+#### Synthetic distance intervals
 
 When using
 
@@ -165,7 +163,7 @@ where the interval width satisfies $\varepsilon_{ij} = 8\sigma$, corresponding t
 
 ------------------------------------------------------------------------
 
-## Interval parameters
+#### Interval parameters
 
 The interval width depends on whether the atoms belong to nearby
 residues.
@@ -190,7 +188,7 @@ Suggested values are
 
 ------------------------------------------------------------------------
 
-## van der Waals constraints
+### van der Waals constraints
 
 Lower-bound constraints based on van der Waals radii can optionally be
 included.
@@ -206,7 +204,7 @@ Options:
 
 ------------------------------------------------------------------------
 
-# Torsion-angle intervals
+### Torsion-angle intervals
 
 Torsion angles are derived from the PDB structure and converted into
 intervals.
@@ -232,7 +230,7 @@ where `torsion_angle_width` defines the total interval width. This corresponds t
 
 ------------------------------------------------------------------------
 
-## Backbone torsion selection
+### Backbone torsion selection
 
 The percentage of backbone torsion angles ($\phi/\psi$) that will be included as
 interval constraints is controlled by
