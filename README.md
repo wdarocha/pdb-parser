@@ -51,6 +51,8 @@ geometric constraints used in the pipeline are generated.
 
 Below is a complete description of all parameters currently supported.
 
+------------------------------------------------------------------------
+
 ### Running the parser
 
 The parser is executed as
@@ -90,29 +92,19 @@ processed by the pipeline.
 
 #### Model selection
 
-Selects which model from the PDB structure will be used.
-
-    model_number: 1
-
-Model numbering follows the PDB convention and is **1-based**.
+Selects which model from the PDB structure will be used. Model numbering follows the PDB convention and is **1-based**.
 
 ------------------------------------------------------------------------
 
 #### Chain selection
 
-Specifies which chain in the selected model will be processed.
-
-    chain_id: A
-
-Only atoms belonging to this chain are considered.
+Specifies which chain in the selected model will be processed. Only atoms belonging to this chain are considered.
 
 ------------------------------------------------------------------------
 
 #### Atom selection strategy
 
 Defines which atoms are extracted from the PDB structure.
-
-    atom_selection: backbone_plus_hydrogens
 
 Currently supported option:
 
@@ -126,7 +118,7 @@ Currently supported option:
 
 Defines how **NMR-derived distance constraints** are generated.
 
-    distance_constraints: interval_centered
+Currently supported option: `interval_centered`
 
 Note that **covalent distances, planar constraints, and peptide-group
 distances are always treated as precise**.
@@ -135,11 +127,7 @@ distances are always treated as precise**.
 
 #### Synthetic distance intervals
 
-When using
-
-    distance_constraints: interval_centered
-
-distance intervals are generated around the reference distance extracted
+When using `interval_centered` distance intervals are generated around the reference distance extracted
 from the PDB.
 
 The reference distance, $d_{ij}$, is perturbed as
@@ -168,11 +156,6 @@ where the interval width satisfies $\varepsilon_{ij} = 8\sigma$, corresponding t
 The interval width depends on whether the atoms belong to nearby
 residues.
 
-    epsilon_short: 1.0
-    epsilon_long: 2.0
-    min_distance: 2.4
-    max_distance: 5.0
-
 | parameter | meaning |
 |-----------|---------|
 | `epsilon_short` | interval width for atoms in the same or adjacent residues |
@@ -180,11 +163,6 @@ residues.
 | `min_distance` | minimum allowed lower bound for distance intervals |
 | `max_distance` | maximum allowed upper bound for distance intervals |
 
-Suggested values are
-
-    epsilon_short = 1.0 Å
-    epsilon_long  = 2.0 Å
-    max_distance  = 5.0 Å
 
 ------------------------------------------------------------------------
 
@@ -192,8 +170,6 @@ Suggested values are
 
 Lower-bound constraints based on van der Waals radii can optionally be
 included.
-
-    vdw_constraints: yes
 
 Options:
 
@@ -233,9 +209,7 @@ where `torsion_angle_width` defines the total interval width. This corresponds t
 ### Backbone torsion selection
 
 The percentage of backbone torsion angles ($\phi/\psi$) that will be included as
-interval constraints is controlled by
-
-    percentage_backbone_torsion_angles: 100.0
+interval constraints is controlled by `percentage_backbone_torsion_angles`
 
 | value | behavior |
 |------|----------|
@@ -244,6 +218,24 @@ interval constraints is controlled by
 
 Angles that are **not selected** receive the default 
 range $(-180^{o},\ 180^{o}]$
+
+------------------------------------------------------------------------
+
+### Configuration parameters example
+
+```
+model_number: 1
+chain_id: A
+atom_selection: backbone_plus_hydrogens
+distance_constraints: interval_centered
+epsilon_short: 1.0
+epsilon_long: 2.0
+min_distance: 2.4
+max_distance: 5.0
+vdw_constraints: yes
+torsion_angle_width: 50.0
+percentage_backbone_torsion_angles: 100.0
+```
 
 ------------------------------------------------------------------------
 
