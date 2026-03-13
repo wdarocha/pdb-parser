@@ -1,13 +1,12 @@
 # pdb-parser
 
 Lightweight Python toolkit for parsing **Protein Data Bank (PDB)**
-structures and generating **distance and torsion-angle constraints**
+Nuclear Magnetic Resonance (NMR) structures and generating **distance and torsion-angle constraints**
 tailored for **Distance Geometry Problem (DGP)** workflows.
 
 The package extracts structural information from PDB files and produces
 constraint sets that can be used in algorithms for protein structure
-determination, including **Discretizable Distance Geometry Problem (DDGP
-/ _i_DDGP)** frameworks.
+determination.
 
 Typical applications include:
 
@@ -42,9 +41,7 @@ Typical applications include:
 ## 📂 Input configuration
 
 The behavior of the parser is controlled by a configuration file located
-at
-
-    data/params.cfg
+at `data/params.cfg`
 
 This file defines how the PDB structures are processed and how the
 geometric constraints used in the pipeline are generated.
@@ -92,7 +89,7 @@ processed by the pipeline.
 
 #### Model selection
 
-Selects which model from the PDB structure will be used. Model numbering follows the PDB convention and is **1-based**.
+Selects which model from the NMR PDB structure will be used.
 
 ------------------------------------------------------------------------
 
@@ -110,7 +107,7 @@ Currently supported option:
 
 | option | description |
 |-------|-------------|
-| `backbone_plus_hydrogens` | backbone atoms (N, CA, C) plus hydrogens directly bonded to them |
+| `backbone_plus_hydrogens` | backbone atoms (N, CA, C) plus hydrogens directly bonded to them (H, HA) |
 
 ------------------------------------------------------------------------
 
@@ -141,7 +138,7 @@ and the resulting interval is
 $$
 \mathcal{D}_{ij} =
 \left[
-\max\left(d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ v_{\mathrm{dw}}\right),
+\max\left(d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ v_{\mathrm{vdWrHH}}\right),
 \
 \min\left(d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ 5 \ \mathrm{Å}\right)
 \right]
@@ -160,16 +157,15 @@ residues.
 |-----------|---------|
 | `epsilon_short` | interval width for atoms in the same or adjacent residues |
 | `epsilon_long` | interval width for atoms in non-adjacent residues |
-| `min_distance` | minimum allowed lower bound for distance intervals |
+| `vdWr_HH` | minimum allowed lower bound for distance intervals |
 | `max_distance` | maximum allowed upper bound for distance intervals |
-
 
 ------------------------------------------------------------------------
 
 ### van der Waals constraints
 
-Lower-bound constraints based on van der Waals radii can optionally be
-included.
+Optional lower-bound distance constraints based on the van der Waals
+radii of protein atoms can be included.
 
 Options:
 
@@ -230,8 +226,8 @@ atom_selection: backbone_plus_hydrogens
 distance_constraints: interval_centered
 epsilon_short: 1.0
 epsilon_long: 2.0
-min_distance: 2.4
 max_distance: 5.0
+vdWr_HH: 2.4
 vdw_constraints: yes
 torsion_angle_width: 50.0
 percentage_backbone_torsion_angles: 100.0
@@ -249,20 +245,6 @@ Clone the repository:
 Install in editable mode:
 
     pip install -e .
-
-------------------------------------------------------------------------
-
-## ▶️ Usage
-
-After configuring the parameters in `data/params.cfg` and listing the
-PDB identifiers in `data/pdb_ids.txt`, run the parsing pipeline.
-
-Example:
-
-``` 
-python3 src/pdb_parser/pdb_parser.py data/pdb_ids.txt data/params.cfg data/pdb data/outputs
-
-```
 
 ------------------------------------------------------------------------
 
