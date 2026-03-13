@@ -244,7 +244,7 @@ interval constraints is controlled by
 | `100` | all backbone torsion angles are used |
 | `<100` | a random subset of torsion angles is used |
 
-Angles that are **not selected** receive the default range $(-180,\ 180]$
+Angles that are **not selected** receive the default range $(-180^{\circ},\ 180^{\circ}]$
 
 ------------------------------------------------------------------------
 
