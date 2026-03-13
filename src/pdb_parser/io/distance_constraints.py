@@ -235,7 +235,7 @@ def vdw_distances(
 		"O": 1.52,
 	}
 	default_radius = 1.50
-	hydrogen_soft_radius = 0.90
+	hydrogen_soft_radius = 1.20 #0.90
 
 	with output_distance_file.open("w", encoding="utf-8") as f:
 		f.write("atom_id_i\tatom_id_j\tresid_i\tresid_j\td_l\td_u\tatom_name_i\tatom_name_j\tresname_i\tresname_j\n")

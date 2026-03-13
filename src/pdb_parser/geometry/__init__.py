@@ -14,10 +14,12 @@ from .distance_geometry import (
 	distances_2_abs_torsion_angle,
 	torsion_angle_2_endpoint_distance,
 	torsion_angle_parameters,
+	torsion_angle_with_points,
 )
 
 __all__ = [
 	"distances_2_abs_torsion_angle",
 	"torsion_angle_2_endpoint_distance",
 	"torsion_angle_parameters",
+	"torsion_angle_with_points",
 ]

@@ -129,3 +129,22 @@ def distances_2_abs_torsion_angle(
 
 	return float(np.arccos(cos_tau))
 # -----------------------------------------------------------------------------------------------------
+def abs_torsion_angle_with_points(x1, x2, x3, x4):
+	d12 = np.linalg.norm(x1 - x2)
+	d13 = np.linalg.norm(x1 - x3)
+	d14 = np.linalg.norm(x1 - x4)
+	d23 = np.linalg.norm(x2 - x3)
+	d24 = np.linalg.norm(x2 - x4)
+	d34 = np.linalg.norm(x3 - x4)
+	
+	return distances_2_abs_torsion_angle(d12, d13, d14, d23, d24, d34)
+# -----------------------------------------------------------------------------------------------------	
+def sign_torsion_angle(x1, x2, x3, x4):
+	normal_plane = np.cross(x3 - x2, x1 - x2)
+	direction = x4 - x2
+	
+	return np.sign(np.dot(normal_plane, direction))
+# -----------------------------------------------------------------------------------------------------
+def torsion_angle_with_points(x1, x2, x3, x4):
+	
+	return sign_torsion_angle(x1, x2, x3, x4) * abs_torsion_angle_with_points(x1, x2, x3, x4)

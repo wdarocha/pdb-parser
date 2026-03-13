@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
 				nres = int(df_X.iat[n - 1, 2])
 				ddgp_order_vec = np.full(nres, 9, dtype=int)
 					
-				skip_flag = reorder_instance(params, out_dir, pdb_id, ddgp_order_vec)
+				skip_flag = sort_instance(params, out_dir, pdb_id, ddgp_order_vec)
 				
 				if skip_flag == 1:
 					continue
