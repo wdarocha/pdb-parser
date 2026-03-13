@@ -39,62 +39,131 @@ Typical applications include:
 
 ------------------------------------------------------------------------
 
-## 📂 Input configuration
+# 📂 Input configuration
 
-The parser behavior is controlled by a configuration file located in
+The behavior of the parser is controlled by a configuration file located
+at
 
     data/params.cfg
 
-This file specifies:
+This file defines how the PDB structures are processed and how the
+geometric constraints used in the pipeline are generated.
 
--   which **model** from the PDB file will be used
--   which **chain** will be processed
--   the **atom selection strategy**
--   the **distance-constraint model**
--   parameters for synthetic or experimental **NMR distance intervals**
--   torsion-angle interval generation
-
-Example:
-
-    model_number: 1
-    chain_id: A
-    atom_selection: backbone_plus_hydrogens
-    distance_constraints: interval_centered
+Below is a complete description of all parameters currently supported.
 
 ------------------------------------------------------------------------
 
-## PDB list
+# Running the parser
+
+The parser is executed as
+
+    python3 src/pdb_parser/pdb_parser.py data/pdb_ids.txt data/params.cfg data/pdb data/outputs
+
+The arguments are:
+
+  -----------------------------------------------------------------------
+  argument                            description
+  ----------------------------------- -----------------------------------
+  `data/pdb_ids.txt`                  text file containing the list of
+                                      PDB identifiers to process
+
+  `data/params.cfg`                   configuration file controlling the
+                                      parser behavior
+
+  `data/pdb`                          directory where PDB structures will
+                                      be stored
+
+  `data/outputs`                      directory where the generated
+                                      constraint files will be written
+  -----------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+# PDB list
 
 The file
 
     data/pdb_ids.txt
 
-contains the list of PDB identifiers to process.
+contains a list of PDB identifiers, one per line.
 
-Example:
+Example
 
     1TOS
     1UAO
 
-Each entry corresponds to a structure that will be retrieved and
+Each identifier corresponds to a structure that will be retrieved and
 processed by the pipeline.
 
 ------------------------------------------------------------------------
 
-## Distance constraint models
+# Configuration parameters (`params.cfg`)
 
-The parser supports multiple strategies for constructing distance
-constraints.
+## Model selection
 
-## Precise distances
+Selects which model from the PDB structure will be used.
 
-Distances extracted directly from the PDB structure.
+    model_number: 1
 
-    distance_constraints: precise
+Model numbering follows the PDB convention and is **1-based**.
 
-## Synthetic intervals
+------------------------------------------------------------------------
 
-Synthetic intervals centered around the reference distance.
+## Chain selection
+
+Specifies which chain in the selected model will be processed.
+
+    chain_id: A
+
+Only atoms belonging to this chain are considered.
+
+------------------------------------------------------------------------
+
+## Atom selection strategy
+
+Defines which atoms are extracted from the PDB structure.
+
+    atom_selection: backbone_plus_hydrogens
+
+Currently supported option:
+
+  -----------------------------------------------------------------------
+  option                              description
+  ----------------------------------- -----------------------------------
+  `backbone_plus_hydrogens`           backbone atoms (N, CA, C) plus
+                                      hydrogens directly bonded to them
+
+  -----------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+# Distance constraint model
+
+Defines how **NMR-derived distance constraints** are generated.
+
+    distance_constraints: interval_centered
+
+Note that **covalent distances, planar constraints, and peptide-group
+distances are always treated as precise**.
+
+------------------------------------------------------------------------
+
+## Synthetic distance intervals
+
+When using
+
+    distance_constraints: interval_centered
+
+distance intervals are generated around the reference distance extracted
+from the PDB.
+
+The reference distance is perturbed as
+
+$$
+d_{ij}^* \sim \mathcal{N}\left(d_{ij},\left(\frac{\varepsilon_{ij}}{8}\right)^2\right)
+$$
+
+and the resulting interval is
 
 $$
 \mathcal{D}_{ij} =
@@ -105,26 +174,67 @@ $$
 \right]
 $$
 
-where $\varepsilon_{ij}$ corresponds to the parameter `interval_width`.
-
-## Experimental NOE intervals
-
-Distance bounds derived from NOESY peak intensity classes:
-
-| NOE class | upper bound |
-|-----------|-------------|
-| strong | 2.5 Å |
-| medium | 3.5 Å |
-| weak | 5.0 Å |
+where the interval width satisfies $\varepsilon_{ij} = 8\sigma$, corresponding to $\pm4\sigma$ around the mean.
 
 ------------------------------------------------------------------------
 
-## Torsion-angle intervals
+## Interval parameters
+
+The interval width depends on whether the atoms belong to nearby
+residues.
+
+    epsilon_short: 1.0
+    epsilon_long: 2.0
+    min_distance: 2.4
+    max_distance: 5.0
+
+  -----------------------------------------------------------------------
+  parameter                           meaning
+  ----------------------------------- -----------------------------------
+  `epsilon_short`                     interval width for atoms in the
+                                      same or adjacent residues
+
+  `epsilon_long`                      interval width for atoms in
+                                      non-adjacent residues
+
+  `min_distance`                      minimum allowed lower bound for
+                                      distance intervals
+
+  `max_distance`                      maximum allowed upper bound for
+                                      distance intervals
+  -----------------------------------------------------------------------
+
+Suggested values are
+
+    epsilon_short = 1.0 Å
+    epsilon_long  = 2.0 Å
+    max_distance  = 5.0 Å
+
+------------------------------------------------------------------------
+
+## van der Waals constraints
+
+Lower-bound constraints based on van der Waals radii can optionally be
+included.
+
+    vdw_constraints: yes
+
+Options:
+
+  value   meaning
+  ------- -----------------------------------------------
+  `yes`   include van der Waals lower-bound constraints
+  `no`    ignore van der Waals constraints
+
+------------------------------------------------------------------------
+
+# Torsion-angle intervals
 
 Torsion angles are derived from the PDB structure and converted into
 intervals.
 
-Given a reference torsion angle $\tau_i$, a perturbed value is sampled as
+Given a reference torsion angle $\tau_{ij}$, a perturbed value is
+sampled as
 
 $$
 \tau_i^* \sim \mathcal{N}\left(\tau_i,\left(\frac{\Delta\tau_i}{8}\right)^2\right)
@@ -140,8 +250,27 @@ $$
 \right],
 $$
 
-where $\Delta\tau_i$ corresponds to the parameter `torsion_angle_width`.
+where `torsion_angle_width` defines the total interval width. This corresponds to $\Delta\tau = 8\sigma$
 
+------------------------------------------------------------------------
+
+## Backbone torsion selection
+
+The percentage of backbone torsion angles ($\phi/\psi$) that will be included as
+interval constraints is controlled by
+
+    percentage_backbone_torsion_angles: 100.0
+
+  value    behavior
+  -------- -------------------------------------------
+  `100`    all backbone torsion angles are used
+  `<100`   a random subset of torsion angles is used
+
+Angles that are **not selected** receive the default range
+
+$$
+[-180^\circ,\ 180^\circ]
+$$
 ------------------------------------------------------------------------
 
 ## ⚙️ Installation instructions
