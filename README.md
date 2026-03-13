@@ -247,9 +247,9 @@ interval constraints is controlled by
 Angles that are **not selected** receive the default range
 
 $$
-\left[
--180^{o},\ 180^{o}
-\right]
+(
+-180^{\circ},\ 180^{\circ}
+)
 $$
 ------------------------------------------------------------------------
 
