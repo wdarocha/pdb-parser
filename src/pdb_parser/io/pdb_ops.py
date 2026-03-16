@@ -115,7 +115,7 @@ def extract_model_chain(
 	if not allow_gaps:
 		diffs = np.diff(resids)
 		if not np.all(diffs == 1):
-			gaps = resids[np.where(diffs > 1)[0]].tolist()
+			gaps = resids[np.where(diffs > 1)[0] + 1].tolist()
 			raise ValueError(f"Gaps found in residue sequence at residues: {gaps}")
 	
 	return selection

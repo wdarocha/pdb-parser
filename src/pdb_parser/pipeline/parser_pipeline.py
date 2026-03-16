@@ -181,8 +181,10 @@ def sort_instance(
 	# Determine number of residues
 	# ------------------------------------------------------------------
 	n = df_X.shape[0]
-	nres = int(df_X.iat[n - 1, 2])
-
+	
+	res_ids = df_X.iloc[:, 2].unique().tolist()
+	# in case the protein chain does not starts from residue 1
+	nres = res_ids[len(res_ids) - 1] - res_ids[0] + 1
 	new_order: list[tuple[int, str]] = []
 
 	# ------------------------------------------------------------------
@@ -190,17 +192,17 @@ def sort_instance(
 	# ------------------------------------------------------------------
 	for k in range(nres):
 
-		resnum_i = k + 1
+		resnum_i = res_ids[k]
 		df_X_i = df_X[df_X[2] == resnum_i]
 
-		skip_flag = validate_backbone_plus_hydrogens_residue(df_X_i, resnum_i, pdb_id, chosen_model, chosen_chain)
+		skip_flag = validate_backbone_plus_hydrogens_residue(df_X_i, resnum_i, pdb_id, chosen_model, chosen_chain, res_ids[0])
 
 		if skip_flag == 1:
 			break
 
 		# First residue uses a special ordering
 		if k == 0:
-			new_order.extend(first_residue_order(df_X_i))
+			new_order.extend(first_residue_order(df_X_i, res_ids[k]))
 
 		# Internal residues use the DDGP ordering
 		else:
@@ -232,10 +234,10 @@ def sort_instance(
 
 	for k in range(nres):
 		if k == 0:
-			atom_cliques.extend(build_first_residue_pattern(available_atoms))
+			atom_cliques.extend(build_first_residue_pattern(available_atoms, res_ids[k]))
 		else:
-			atom_cliques.extend(build_ddgp_pattern_entries(ddgp_order_vec[k], k + 1, available_atoms))
-
+			atom_cliques.extend(build_ddgp_pattern_entries(ddgp_order_vec[k], res_ids[k], available_atoms))
+	
 	T = build_atom_clique_index_matrix(atom_cliques, df_Xreord, df_A, df_Ireord)
 
 	# ------------------------------------------------------------------

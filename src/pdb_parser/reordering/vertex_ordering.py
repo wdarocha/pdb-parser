@@ -30,6 +30,7 @@ def get_missing_backbone_plus_hydrogen_atoms(
 	atom_names: set[str],
 	resname: str,
 	resnum: int,
+	resnum_1: int,
 ) -> list[str]:
 	"""
 	Return the list of missing required atoms for one residue.
@@ -44,7 +45,7 @@ def get_missing_backbone_plus_hydrogen_atoms(
 
 	# --- backbone nitrogen hydrogen requirement
 	if resname != "PRO":
-		if resnum == 1:
+		if resnum == resnum_1:
 			if not any(h in atom_names for h in ("H", "H1", "H2", "H3")):
 				missing_atoms.append("H/H1/H2/H3")
 		else:
@@ -75,6 +76,7 @@ def validate_backbone_plus_hydrogens_residue(
 	pdb_id: str,
 	chosen_model: int,
 	chosen_chain: str,
+	resnum_1: int,
 ) -> int:
 	"""
 	Validate one residue for the 'backbone_plus_hydrogens' atom selection.
@@ -85,27 +87,18 @@ def validate_backbone_plus_hydrogens_residue(
 		1 if the structure must be skipped, 0 otherwise.
 	"""
 	if df_X_i.empty:
-		print(
-			f"[skipping] {pdb_id}, model {chosen_model}, chain {chosen_chain} "
-			f"does not contain residue {resnum_i}"
-		)
+		print(f"[{pdb_id}] Skipped: model {chosen_model}, chain {chosen_chain} does not contain residue {resnum_i}")
 		return 1
 
-	atom_names_i = set(
-		df_X_i[1].astype(str).str.strip().str.upper().tolist()
-	)
+	atom_names_i = set(df_X_i[1].astype(str).str.strip().str.upper().tolist())
 
 	resname_i = str(df_X_i.iat[0, 3]).strip().upper()
 
-	missing_atoms = get_missing_backbone_plus_hydrogen_atoms(
-		atom_names_i,
-		resname_i,
-		resnum_i,
-	)
+	missing_atoms = get_missing_backbone_plus_hydrogen_atoms(atom_names_i, resname_i, resnum_i, resnum_1)
 
 	if missing_atoms:
 		print(
-			f"[skipping] {pdb_id} (model {chosen_model}, chain {chosen_chain}) "
+			f"[{pdb_id}] Skipped: (model {chosen_model}, chain {chosen_chain}) "
 			f"- option 'backbone_plus_hydrogens': missing atom(s) {missing_atoms} "
 			f"in residue {resnum_i} ({resname_i})."
 		)
@@ -125,6 +118,7 @@ def get_nonterminal_h_group(resname: str) -> tuple[str, ...]:
 
 	return ("H",)
 
+
 def get_ha_group(resname: str) -> tuple[str, ...]:
 	"""
 	Return the allowed atom names for the alpha-hydrogen position.
@@ -136,70 +130,99 @@ def get_ha_group(resname: str) -> tuple[str, ...]:
 
 	return ("HA",)
 
+
 def get_internal_residue_ordering_template(
 	ordering_id: int,
 	resname: str,
-) -> list[str]:
+) -> list[tuple[str, ...]]:
 	"""
 	Return the concrete atom ordering template for a non-terminal residue.
 
-	The function resolves hydrogen alternatives (H/HD2/HD3 and HA/HA2/HA3)
-	based on the residue name.
+	Each position is represented as a tuple of allowed atom names.
+	For fixed atoms, the tuple has length 1.
+	For ambiguous positions, the tuple contains all accepted alternatives.
 	"""
-
 	h_group = get_nonterminal_h_group(resname)
 	ha_group = get_ha_group(resname)
 
-	# choose the first valid atom name from each group
-	h_atom = h_group[0]
-	ha_atom = ha_group[0]
-
-	ordering_templates: dict[int, list[str]] = {
-		1:  ["N", "CA", "C", h_atom, ha_atom],
-		2:  ["N", "CA", "C", ha_atom, h_atom],
-		3:  ["N", "CA", h_atom, ha_atom, "C"],
-		4:  ["N", "CA", h_atom, "C", ha_atom],
-		5:  ["N", h_atom, "CA", ha_atom, "C"],
-		6:  ["N", h_atom, "CA", "C", ha_atom],
-		7:  [h_atom, "N", "CA", ha_atom, "C"],
-		8:  [h_atom, "N", "CA", "C", ha_atom],
-		9:  [h_atom, "CA", "N", ha_atom, "C"],
-		10: [h_atom, "CA", "N", "C", ha_atom],
+	ordering_templates: dict[int, list[tuple[str, ...]]] = {
+		1:  [("N",), ("CA",), ("C",), h_group, ha_group],
+		2:  [("N",), ("CA",), ("C",), ha_group, h_group],
+		3:  [("N",), ("CA",), h_group, ha_group, ("C",)],
+		4:  [("N",), ("CA",), h_group, ("C",), ha_group],
+		5:  [("N",), h_group, ("CA",), ha_group, ("C",)],
+		6:  [("N",), h_group, ("CA",), ("C",), ha_group],
+		7:  [h_group, ("N",), ("CA",), ha_group, ("C",)],
+		8:  [h_group, ("N",), ("CA",), ("C",), ha_group],
+		9:  [h_group, ("CA",), ("N",), ha_group, ("C",)],
+		10: [h_group, ("CA",), ("N",), ("C",), ha_group],
 	}
 
 	if ordering_id not in ordering_templates:
-		raise ValueError(f"Invalid ordering_id: {ordering_id}. Expected an integer from 1 to 10.")
+		raise ValueError(
+			f"Invalid ordering_id: {ordering_id}. Expected an integer from 1 to 10."
+		)
 
 	return ordering_templates[ordering_id]
 
+
+def resolve_atom_name_choice(
+	atom_name_to_atom_id: dict[str, int],
+	allowed_atom_names: tuple[str, ...],
+	residue_id: int,
+	resname: str,
+) -> tuple[int, str]:
+	"""
+	Resolve one atom position by selecting the first allowed atom name
+	that is present in the residue.
+	"""
+	for atom_name in allowed_atom_names:
+		atom_id = atom_name_to_atom_id.get(atom_name)
+		if atom_id is not None:
+			return atom_id, atom_name
+
+	raise ValueError(f"For option 'backbone_plus_hydrogens' in residue {resname}_{residue_id} allowed atom names {allowed_atom_names} were not found")
+
+
 def get_numeric_atom_order_from_named_order(
 	df_X_i,
-	ordered_atom_names: list[str],
-) -> list[int]:
+	ordered_atom_name_groups: list[tuple[str, ...]],
+) -> list[tuple[int, str]]:
 	"""
-	Return the ordered list of atom ids for one residue from an ordered
-	list of atom names.
+	Return the ordered list of (atom_id, atom_name) pairs for one residue
+	from an ordered list of allowed atom-name groups.
 
 	The input DataFrame must contain exactly one residue and follow the
 	column convention:
 	- column 0: atom_id
 	- column 1: atom_name
+	- column 2: residue_id
+	- column 3: residue_name
 	"""
 	if df_X_i.empty:
 		raise ValueError("The residue DataFrame is empty.")
+
+	residue_id = int(df_X_i.iat[0, 2])
+	resname = str(df_X_i.iat[0, 3]).strip().upper()
 
 	atom_name_to_atom_id = {
 		str(row[1]).strip().upper(): int(row[0])
 		for _, row in df_X_i.iterrows()
 	}
 
-	try:
-		return [atom_name_to_atom_id[atom_name] for atom_name in ordered_atom_names]
-	except KeyError as exc:
-		raise ValueError(
-			f"Atom {exc} is missing in residue {int(df_X_i.iat[0, 2])} "
-			f"({str(df_X_i.iat[0, 3]).strip().upper()})."
-		) from exc
+	resolved_order: list[tuple[int, str]] = []
+
+	for allowed_atom_names in ordered_atom_name_groups:
+		atom_id, atom_name = resolve_atom_name_choice(
+			atom_name_to_atom_id,
+			allowed_atom_names,
+			residue_id,
+			resname,
+		)
+		resolved_order.append((atom_id, atom_name))
+
+	return resolved_order
+
 
 def get_internal_residue_numeric_order(
 	df_X_i,
@@ -214,20 +237,9 @@ def get_internal_residue_numeric_order(
 
 	resname = str(df_X_i.iat[0, 3]).strip().upper()
 
-	ordered_atom_names = get_internal_residue_ordering_template(
-		ordering_id=ordering_id,
-		resname=resname,
-	)
+	ordered_atom_name_groups = get_internal_residue_ordering_template(ordering_id, resname)
 
-	ordered_atom_ids = get_numeric_atom_order_from_named_order(
-		df_X_i=df_X_i,
-		ordered_atom_names=ordered_atom_names,
-	)
-
-	return [
-		(atom_id, atom_name)
-		for atom_id, atom_name in zip(ordered_atom_ids, ordered_atom_names)
-	]
+	return get_numeric_atom_order_from_named_order(df_X_i, ordered_atom_name_groups)
 # -----------------------------------------------------------------------------------------------------
 def choose_first_existing_atom(
 	atom_names_present: set[str],
@@ -266,6 +278,7 @@ def get_first_residue_ha_atom(
 
 def first_residue_order(
 	df_X_i,
+	resnum_1: int,
 ) -> list[tuple[int, str]]:
 	"""
 	Return the ordered list of (atom_id, atom_name) pairs for the first residue.
@@ -288,9 +301,9 @@ def first_residue_order(
 		str(row[1]).strip().upper(): int(row[0])
 		for _, row in df_X_i.iterrows()
 	}
-
+	
 	atom_names_present = set(atom_name_to_atom_id.keys())
-
+	
 	required_backbone = {"N", "CA", "C"}
 	missing_backbone = sorted(required_backbone - atom_names_present)
 
@@ -761,9 +774,10 @@ HM_CANDIDATES: tuple[str, ...] = ("H3", "H2")
 
 def _get_first_residue_atom_names(
 	available_atoms: list[tuple[int, str]],
+	resnum_1: int,
 ) -> set[str]:
 	"""
-	Extract the atom names that belong to residue 1.
+	Extract the atom names that belong to residue "resnum_1".
 
 	Parameters
 	----------
@@ -778,7 +792,7 @@ def _get_first_residue_atom_names(
 	first_residue_atom_names: set[str] = set()
 
 	for residue_id, atom_name in available_atoms:
-		if residue_id == 1:
+		if residue_id == resnum_1:
 			first_residue_atom_names.add(atom_name)
 
 	return first_residue_atom_names
@@ -819,9 +833,12 @@ def _pick_first_available_atom(
 		f"but none was found in {sorted(available_atom_names)}."
 	)
 
-def _build_pair(atom_name: str) -> ResidueAtomPair:
+def _build_pair(
+	atom_name: str,
+	res1_id: int,
+) -> ResidueAtomPair:
 	"""
-	Build the pair for residue 1.
+	Build the pair for residue "res1_id".
 
 	Parameters
 	----------
@@ -833,10 +850,11 @@ def _build_pair(atom_name: str) -> ResidueAtomPair:
 	tuple[int, str]
 		Pair in the form (1, atom_name).
 	"""
-	return (1, atom_name)
+	return (res1_id, atom_name)
 
 def _build_row(
 	atom_names: list[Optional[str]],
+	res1_id: int,
 	row_id: int,
 ) -> Residue1Row:
 	"""
@@ -863,12 +881,13 @@ def _build_row(
 		if atom_name is None:
 			pairs.append(None)
 		else:
-			pairs.append(_build_pair(atom_name))
+			pairs.append(_build_pair(atom_name, res1_id))
 
 	return pairs, row_id
 
 def build_first_residue_pattern(
 	available_atoms: list[tuple[int, str]],
+	res1_id: int,
 ) -> list[Residue1Row]:
 	"""
 	Build the initialization pattern for residue 1 according to the number
@@ -902,7 +921,7 @@ def build_first_residue_pattern(
 	- Missing positions are represented with None.
 	- All returned pairs use residue index 1.
 	"""
-	available_atom_names = _get_first_residue_atom_names(available_atoms)
+	available_atom_names = _get_first_residue_atom_names(available_atoms, res1_id)
 	atom_count = len(available_atom_names)
 
 	if atom_count == 7:
@@ -910,13 +929,13 @@ def build_first_residue_pattern(
 		ha_atom = _pick_first_available_atom(available_atom_names, HA_CANDIDATES, "HA")
 
 		return [
-			_build_row([None, None, None, "H3"], 1),
-			_build_row([None, None, "H3", "H2"], 1),
-			_build_row([None, "H3", "H2", hn_atom], 1),
-			_build_row(["H3", "H2", hn_atom, "N"], 1),
-			_build_row(["H2", hn_atom, "N", "CA"], 1),
-			_build_row([hn_atom, "N", "CA", ha_atom], 2),
-			_build_row(["N", "CA", ha_atom, "C"], 1),
+			_build_row([None, None, None, "H3"], res1_id, 1),
+			_build_row([None, None, "H3", "H2"], res1_id, 1),
+			_build_row([None, "H3", "H2", hn_atom], res1_id, 1),
+			_build_row(["H3", "H2", hn_atom, "N"], res1_id, 1),
+			_build_row(["H2", hn_atom, "N", "CA"], res1_id, 1),
+			_build_row([hn_atom, "N", "CA", ha_atom], res1_id, 2),
+			_build_row(["N", "CA", ha_atom, "C"], res1_id, 1),
 		]
 
 	if atom_count == 6:
@@ -925,12 +944,12 @@ def build_first_residue_pattern(
 		ha_atom = _pick_first_available_atom(available_atom_names, HA_CANDIDATES, "HA")
 
 		return [
-			_build_row([None, None, None, hm_atom], 1),
-			_build_row([None, None, hm_atom, hn_atom], 1),
-			_build_row([None, hm_atom, hn_atom, "N"], 1),
-			_build_row([hm_atom, hn_atom, "N", "CA"], 1),
-			_build_row([hn_atom, "N", "CA", ha_atom], 2),
-			_build_row(["N", "CA", ha_atom, "C"], 1),
+			_build_row([None, None, None, hm_atom], res1_id, 1),
+			_build_row([None, None, hm_atom, hn_atom], res1_id, 1),
+			_build_row([None, hm_atom, hn_atom, "N"], res1_id, 1),
+			_build_row([hm_atom, hn_atom, "N", "CA"], res1_id, 1),
+			_build_row([hn_atom, "N", "CA", ha_atom], res1_id, 2),
+			_build_row(["N", "CA", ha_atom, "C"], res1_id, 1),
 		]
 
 	if atom_count == 5:
@@ -938,11 +957,11 @@ def build_first_residue_pattern(
 		hn_atom = _pick_first_available_atom(available_atom_names, HN_CANDIDATES, "HN")
 
 		return [
-			_build_row([None, None, None, "N"], 1),
-			_build_row([None, None,"N", "CA",], 1),
-			_build_row([None, "N", "CA", "C"], 1),
-			_build_row(["N", "CA", "C", ha_atom], 1),
-			_build_row([ha_atom, "CA", "N", hn_atom], 2),
+			_build_row([None, None, None, "N"], res1_id, 1),
+			_build_row([None, None,"N", "CA",], res1_id, 1),
+			_build_row([None, "N", "CA", "C"], res1_id, 1),
+			_build_row(["N", "CA", "C", ha_atom], res1_id, 1),
+			_build_row([ha_atom, "CA", "N", hn_atom], res1_id, 2),
 		]
 
 	raise ValueError(

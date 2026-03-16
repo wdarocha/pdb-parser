@@ -99,7 +99,7 @@ def build_covalent_and_planar_topology(
 		pairs = set(RESIDUE_BONDS.get(residue_name, set()))
 
 		# N-terminus H variants if present
-		for hydrogen_name in ("H", "H1", "H2", "H3", "HD2"): # HD2 for PRO
+		for hydrogen_name in ("H", "H1", "H2", "H3", "HD2", "HD3"): # HD2/HD3 for PRO
 			if hydrogen_name in names_present:
 				pairs.add(("N", hydrogen_name))
 

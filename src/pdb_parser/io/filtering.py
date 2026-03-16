@@ -10,12 +10,12 @@ def _require_backbone(present: Set[str], *, resname: str, resid: int, mode: str)
 	"""Ensure N, CA, C exist when the mode depends on backbone atoms."""
 	missing = [a for a in _BACKBONE if a not in present]
 	if missing:
-		raise ValueError(f"Residue {resname}_{resid}: missing backbone atoms {missing}  for mode '{mode}'.")
+		raise ValueError(f"Residue {resname}_{resid}: missing backbone atoms {missing} for option '{mode}'.")
 # -----------------------------------------------------------------------------------------------------
 def _require_any_H_variant(present: Set[str], *, resname: str, resid: int, mode: str) -> None:
 	"""Require at least one of H/H1/H2/H3 to exist."""
 	if not any(h in present for h in ("H", "H1", "H2", "H3")):
-		raise ValueError(f"Residue {resname}_{resid}: missing N-H variant; need one of ['H','H1','H2','H3'] for mode '{mode}'.")
+		raise ValueError(f"Residue {resname}_{resid}: missing N-H variant; need one of ['H','H1','H2','H3'] for option '{mode}'.")
 # -----------------------------------------------------------------------------------------------------
 def _allowed_names_for_residue(
 	resname: str,
@@ -65,22 +65,22 @@ def _allowed_names_for_residue(
 			elif "HA3" in present_names:
 				allowed.add("HA3")
 			else:
-				raise ValueError(f"Residue GLY_{resid}: missing HA2/HA3 required for mode '{m}'.")
+				raise ValueError(f"Residue GLY_{resid}: missing HA2/HA3 required for option '{m}'.")
 		elif r == "PRO":
 			# Need HA and one of HD2/HD3 (N-H not required)
 			if "HA" not in present_names:
-				raise ValueError(f"Residue PRO_{resid}: missing HA required for mode '{m}'.")
+				raise ValueError(f"Residue PRO_{resid}: missing HA required for option '{m}'.")
 			allowed.add("HA")
 			if "HD2" in present_names:
 				allowed.add("HD2")
 			elif "HD3" in present_names:
 				allowed.add("HD3")
 			else:
-				raise ValueError(f"Residue PRO_{resid}: missing one of ['HD2','HD3'] required for mode '{m}'.")
+				raise ValueError(f"Residue PRO_{resid}: missing one of ['HD2','HD3'] required for option '{m}'.")
 		else:
 			# Other residues: need HA
 			if "HA" not in present_names:
-				raise ValueError(f"Residue {r}_{resid}: missing HA required for mode '{m}'.")
+				raise ValueError(f"Residue {r}_{resid}: missing HA required for option '{m}'.")
 			allowed.add("HA")
 		
 		return allowed
@@ -96,19 +96,19 @@ def _allowed_names_for_residue(
 			required = {"HA2", "HA3", "O"}
 			missing = [a for a in required if a not in present_names]
 			if missing:
-				raise ValueError(f"Residue GLY_{resid}: missing {missing} required for mode '{m}'.")
+				raise ValueError(f"Residue GLY_{resid}: missing {missing} required for option '{m}'.")
 			allowed.update(required)
 		elif r == "PRO":
 			required = {"HA", "CD", "CB", "O"}
 			missing = [a for a in required if a not in present_names]
 			if missing:
-				raise ValueError(f"Residue PRO_{resid}: missing {missing} required for mode '{m}'.")
+				raise ValueError(f"Residue PRO_{resid}: missing {missing} required for option '{m}'.")
 			allowed.update(required)
 		else:
 			required = {"HA", "CB", "O"}
 			missing = [a for a in required if a not in present_names]
 			if missing:
-				raise ValueError(f"Residue {r}_{resid}: missing {missing} required for mode '{m}'.")
+				raise ValueError(f"Residue {r}_{resid}: missing {missing} required for option '{m}'.")
 			allowed.update(required)
 		
 		return allowed
@@ -135,7 +135,7 @@ def save_filtered_atoms(
 		
 		allowed = _allowed_names_for_residue(resname, mode, present, resid=resid)
 		
-		if allowed is None:  # full_chain
+		if allowed is None:   # full_chain
 			kept.extend(res.atoms)
 		else:
 			for a in res.atoms:

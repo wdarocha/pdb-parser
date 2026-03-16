@@ -59,6 +59,9 @@ def main(argv: list[str] | None = None) -> int:
 	ensure_dir(out_dir)
 		
 	for pdb_id in pdb_ids:
+		print("------------------------------------------------------")
+		print(f"------------------------ {pdb_id} ------------------------")
+		print("------------------------------------------------------")
 		download_pdb(pdb_id, pdb_data_dir)
 		try:
 			parser(params, pdb_data_dir, out_dir, pdb_id, True)
@@ -71,7 +74,11 @@ def main(argv: list[str] | None = None) -> int:
 				Xfile = out_dir_i / f"X_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"
 				df_X = read_space_separated_file(Xfile)
 				n = df_X.shape[0]
-				nres = int(df_X.iat[n - 1, 2])
+				
+				res_ids = df_X.iloc[:, 2].unique().tolist()
+				# in case the protein chain does not starts from residue 1
+				nres = res_ids[len(res_ids) - 1] - res_ids[0] + 1
+				
 				ddgp_order_vec = np.full(nres, 9, dtype=int)
 					
 				skip_flag = sort_instance(params, out_dir, pdb_id, ddgp_order_vec)
