@@ -147,7 +147,7 @@ def parser(
 	if remove_tmp_dir and tmp_dir.exists():
 		shutil.rmtree(tmp_dir)
 # -----------------------------------------------------------------------------------------------------
-def sort_instance(
+def reorder_instance(
 	params: dict[str, object],
 	out_dir: str | Path,
 	pdb_id: str,
@@ -155,7 +155,7 @@ def sort_instance(
 ) -> int:
 	"""
 	Read the structure and distance files, compute the DDGP vertex ordering,
-	sort the data accordingly, and save the sorted files.
+	reorder the data accordingly, and save the reordered files.
 
 	The function returns a skip_flag (0 or 1) indicating whether the
 	structure should be skipped.
@@ -215,13 +215,13 @@ def sort_instance(
 		return skip_flag
 
 	# ------------------------------------------------------------------
-	# Sort structure and distance data
+	# Reorder structure and distance data
 	# ------------------------------------------------------------------
 	atom_ids_new_order = [atom_id for atom_id, _ in new_order]
 		
-	df_Xreord = sort_structure_dataframe(df_X, atom_ids_new_order)
+	df_Xreordered = reorder_structure_dataframe(df_X, atom_ids_new_order)
 
-	df_Ireord = sort_distance_dataframe(df_I, atom_ids_new_order)
+	df_Ireordered = reorder_distance_dataframe(df_I, atom_ids_new_order)
 	
 	atom_names_new_order = [atom_name for _, atom_name in new_order]
 
@@ -230,7 +230,7 @@ def sort_instance(
 	# ------------------------------------------------------------------
 	atom_cliques: list[tuple[list[tuple[int, str]], int]] = []
 
-	available_atoms = build_available_atoms(df_Xreord)
+	available_atoms = build_available_atoms(df_Xreordered)
 
 	for k in range(nres):
 		if k == 0:
@@ -238,20 +238,21 @@ def sort_instance(
 		else:
 			atom_cliques.extend(build_ddgp_pattern_entries(ddgp_order_vec[k], res_ids[k], available_atoms))
 	
-	T = build_atom_clique_index_matrix(atom_cliques, df_Xreord, df_A, df_Ireord)
+	T = build_atom_clique_index_matrix(atom_cliques, df_Xreordered, df_A, df_Ireordered)
 
 	# ------------------------------------------------------------------
-	# Save sorted files
+	# Save reordered files
 	# ------------------------------------------------------------------
-	out_dir_pdb_id_sorted = Path(out_dir_pdb_id) / "sorted"
-	ensure_dir(out_dir_pdb_id_sorted)
-	
-	Xfile = out_dir_pdb_id_sorted / f"X_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"
-	Ifile = out_dir_pdb_id_sorted / f"I_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"
-	Tfile = out_dir_pdb_id_sorted / f"T_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"
-	
-	save_distances_from_df_structure(df_Ireord, Ifile)
-	save_coordinates_from_df_structure(df_Xreord, Xfile)
+	out_dir_pdb_id_reordered = Path(out_dir_pdb_id) / "reordered"
+	ensure_dir(out_dir_pdb_id_reordered)
+
+	Xfile = out_dir_pdb_id_reordered / f"X_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"
+	Ifile = out_dir_pdb_id_reordered / f"I_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"
+	Tfile = out_dir_pdb_id_reordered / f"T_{pdb_id}_model{chosen_model}_chain{chosen_chain}.dat"
+
+	save_distances_from_df_structure(df_Ireordered, Ifile)
+	save_coordinates_from_df_structure(df_Xreordered, Xfile)
 	save_cliques_from_matrix_T(T, Tfile)
+
 
 	return skip_flag

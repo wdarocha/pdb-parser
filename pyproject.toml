@@ -17,6 +17,10 @@ dependencies = [
     "MDAnalysis",
 ]
 
+[project.scripts]
+pdb-parser = "pdb_parser.pdb_parser:main"
+instance-reorder = "pdb_parser.instance_reorder:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

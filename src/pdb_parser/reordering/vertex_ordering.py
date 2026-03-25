@@ -7,8 +7,8 @@ geometry pipeline.
 This module contains functions used to:
 
 - build vertex orderings from atom/residue information
-- sort atom lists
-- sort distance constraint files
+- reorder atom lists
+- reorder distance constraint files
 - support DDGP-compatible orderings
 
 The functions defined here operate only on index lists and ordering
@@ -435,22 +435,22 @@ def first_residue_order(
 
 	raise ValueError("Could not match any valid ordering pattern for the first residue.")
 # -----------------------------------------------------------------------------------------------------
-def sort_structure_dataframe(
+def reorder_structure_dataframe(
 	df,
 	new_order: list[int],
 ):
-	df_sorted = df.set_index(0).loc[new_order].reset_index()
+	df_reordered = df.set_index(0).loc[new_order].reset_index()
 
-	df_sorted[0] = range(1, len(df_sorted) + 1)
+	df_reordered[0] = range(1, len(df_reordered) + 1)
 
-	return df_sorted
+	return df_reordered
 # -----------------------------------------------------------------------------------------------------
-def sort_distance_dataframe(
+def reorder_distance_dataframe(
 	df_D,
 	atom_ids_new_order: list[int],
 ):
 	"""
-	Sort the atom indices in a distance-constraint DataFrame.
+	Reorder the atom indices in a distance-constraint DataFrame.
 
 	Parameters
 	----------
@@ -556,13 +556,13 @@ ATOM_ALIAS_MAP: dict[str, tuple[str, ...]] = {
 }
 
 
-def build_available_atoms(df_Xreord) -> list[tuple[int, str]]:
+def build_available_atoms(df_Xreordered) -> list[tuple[int, str]]:
 	"""
 	Build the available atom list as (residue_id, atom_name).
 
 	Parameters
 	----------
-	df_Xreord : pd.DataFrame
+	df_Xreordered : pd.DataFrame
 		Reordered atom dataframe.
 
 	Returns
@@ -572,7 +572,7 @@ def build_available_atoms(df_Xreord) -> list[tuple[int, str]]:
 	"""
 	available_atoms: list[tuple[int, str]] = []
 
-	for row in df_Xreord.itertuples(index=False):
+	for row in df_Xreordered.itertuples(index=False):
 		atom_name = str(row[1])
 		residue_id = int(row[2])
 		available_atoms.append((residue_id, atom_name))
