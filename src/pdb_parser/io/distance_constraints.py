@@ -200,24 +200,189 @@ def covalent_and_planar_distances(
 
 	print(f"[OK] Covalent/planar pair distances saved to: {output_distance_file}")
 # -----------------------------------------------------------------------------------------------------
+def _is_omega_path(
+	path_keys: tuple[tuple[int, str], 
+	tuple[int, str], tuple[int, str], 
+	tuple[int, str]],
+) -> bool:
+	"""
+	Return True if the 4-atom path matches a backbone omega torsion:
+		C(i-1) - N(i) - CA(i) - C(i)
+	"""
+	(resid_1, atom_1), (resid_2, atom_2), (resid_3, atom_3), (resid_4, atom_4) = path_keys
+
+	return (
+		atom_1 == "C"
+		and atom_2 == "N"
+		and atom_3 == "CA"
+		and atom_4 == "C"
+		and resid_2 == resid_3 == resid_4
+		and resid_1 == resid_2 - 1
+	)
+
+def _is_phi_path(
+	path_keys: tuple[tuple[int, str], 
+	tuple[int, str], tuple[int, str], 
+	tuple[int, str]],
+) -> bool:
+	"""
+	Return True if the 4-atom path matches a backbone phi torsion:
+		N(i) - CA(i) - C(i) - N(i+1)
+	"""
+	(resid_1, atom_1), (resid_2, atom_2), (resid_3, atom_3), (resid_4, atom_4) = path_keys
+
+	return (
+		atom_1 == "N"
+		and atom_2 == "CA"
+		and atom_3 == "C"
+		and atom_4 == "N"
+		and resid_1 == resid_2 == resid_3
+		and resid_4 == resid_1 + 1
+	)
+
+def _is_psi_path(
+	path_keys: tuple[tuple[int, str], 
+	tuple[int, str], tuple[int, str], 
+	tuple[int, str]],
+) -> bool:
+	"""
+	Return True if the 4-atom path matches a backbone psi torsion:
+		CA(i) - C(i) - N(i+1) - CA(i+1)
+	"""
+	(resid_1, atom_1), (resid_2, atom_2), (resid_3, atom_3), (resid_4, atom_4) = path_keys
+
+	return (
+		atom_1 == "CA"
+		and atom_2 == "C"
+		and atom_3 == "N"
+		and atom_4 == "CA"
+		and resid_1 == resid_2
+		and resid_3 == resid_4
+		and resid_3 == resid_1 + 1
+	)
+
+def is_backbone_dihedral_path(
+	path_keys: tuple[tuple[int, str], 
+	tuple[int, str], tuple[int, str], 
+	tuple[int, str]],
+) -> bool:
+	"""
+	Return True if the 4-atom path matches a backbone omega, phi, or psi torsion.
+
+	The check is performed in both traversal directions.
+	"""
+	reversed_path_keys = tuple(reversed(path_keys))
+
+	return (
+		_is_omega_path(path_keys)
+		or _is_phi_path(path_keys)
+		or _is_psi_path(path_keys)
+		or _is_omega_path(reversed_path_keys)
+		or _is_phi_path(reversed_path_keys)
+		or _is_psi_path(reversed_path_keys)
+	)
+
+def build_vdw_torsion_pairs(
+	topology: dict[str, object],
+) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
+	"""
+	Build the sets of atom pairs separated by exactly 3 covalent bonds.
+
+	Returns
+	-------
+	tuple[set[tuple[int, int]], set[tuple[int, int]]]
+		First set:
+			General 1-4 pairs that should use relaxed vdW.
+		Second set:
+			Backbone 1-4 pairs corresponding to omega, phi, or psi,
+			which should be excluded from vdW.
+	"""
+	atom_index = topology["atom_index"]
+	logical_graph = topology["logical_graph"]
+	bonded_pairs = topology["bonded_pairs"]
+	angle_pairs = topology["angle_pairs"]
+
+	relaxed_torsion_pairs: set[tuple[int, int]] = set()
+	backbone_dihedral_pairs: set[tuple[int, int]] = set()
+
+	for start_key, first_neighbor_keys in logical_graph.items():
+		start_index = atom_index.get(start_key)
+
+		if start_index is None:
+			continue
+
+		for first_key in first_neighbor_keys:
+			second_neighbor_keys = logical_graph.get(first_key, set())
+
+			for second_key in second_neighbor_keys:
+				if second_key == start_key:
+					continue
+
+				third_neighbor_keys = logical_graph.get(second_key, set())
+
+				for third_key in third_neighbor_keys:
+					if third_key == start_key:
+						continue
+
+					if third_key == first_key:
+						continue
+
+					if third_key == second_key:
+						continue
+
+					end_index = atom_index.get(third_key)
+
+					if end_index is None:
+						continue
+
+					if end_index == start_index:
+						continue
+
+					pair = (start_index, end_index) if start_index > end_index else (end_index, start_index)
+
+					if pair in bonded_pairs:
+						continue
+
+					if pair in angle_pairs:
+						continue
+
+					path_keys = (start_key, first_key, second_key, third_key)
+
+					if is_backbone_dihedral_path(path_keys):
+						backbone_dihedral_pairs.add(pair)
+					else:
+						relaxed_torsion_pairs.add(pair)
+
+	return relaxed_torsion_pairs, backbone_dihedral_pairs
+	
 def vdw_distances(
 	tsv_structure_file: str | Path,
 	topology: dict[str, object],
 	output_distance_file: str | Path,
 ) -> None:
 	"""
-	Write van der Waals lower-bound constraints for pairs not separated by
-	1 or 2 covalent bonds.
+	Write van der Waals lower-bound constraints.
+
+	Rules
+	-----
+	- 1-2 pairs are excluded
+	- 1-3 pairs are excluded
+	- 1-4 backbone omega/phi/psi pairs are excluded
+	- all other 1-4 pairs use a relaxed vdW lower bound
+	- all remaining pairs use the standard vdW lower bound
 
 	Input df columns (required)
 	----------------------------------
 	atom_id, atom_name, resid, resname, x, y, z
 	"""
 	df = load_filtered_atoms_table(tsv_structure_file)
-	
+
 	if df.empty:
 		print(f"[OK] Van der Waals distance table saved to (empty): {output_distance_file}")
-		output_distance_file.write_text("atom_id_i\tatom_id_j\tresid_i\tresid_j\td_l\td_u\tatom_name_i\tatom_name_j\tresname_i\tresname_j\n", encoding="utf-8")
+		output_distance_file.write_text(
+			"atom_id_i\tatom_id_j\tresid_i\tresid_j\td_l\td_u\tatom_name_i\tatom_name_j\tresname_i\tresname_j\n",
+			encoding="utf-8",
+		)
 		return
 
 	coords = df[["x", "y", "z"]].to_numpy(dtype=float)
@@ -226,7 +391,11 @@ def vdw_distances(
 	resname = df["resname"].astype(str).str.strip().str.upper().to_numpy()
 	atom_name = df["atom_name"].astype(str).str.strip().str.upper().to_numpy()
 
-	excluded_pairs = topology["excluded_pairs"]
+	bonded_pairs = topology["bonded_pairs"]
+	angle_pairs = topology["angle_pairs"]
+	relaxed_torsion_pairs, backbone_dihedral_pairs = build_vdw_torsion_pairs(topology)
+
+	excluded_pairs = bonded_pairs.union(angle_pairs).union(backbone_dihedral_pairs)
 
 	vdw_radii = {
 		"H": 1.20,
@@ -235,7 +404,8 @@ def vdw_distances(
 		"O": 1.52,
 	}
 	default_radius = 1.50
-	hydrogen_soft_radius = 1.20 # 0.90
+	hydrogen_soft_radius = 0.90
+	torsion_scale = 0.8
 
 	with output_distance_file.open("w", encoding="utf-8") as f:
 		f.write("atom_id_i\tatom_id_j\tresid_i\tresid_j\td_l\td_u\tatom_name_i\tatom_name_j\tresname_i\tresname_j\n")
@@ -260,24 +430,36 @@ def vdw_distances(
 					radius_j = vdw_radii.get(element_j, default_radius)
 
 				radius_sum = radius_i + radius_j
-				lower_bound = radius_sum
+
+				if (i, j) in relaxed_torsion_pairs:
+					lower_bound = torsion_scale * radius_sum
+				else:
+					lower_bound = radius_sum
 
 				if distance < lower_bound:
 					for percentage in range(90, 0, -10):
-						candidate = (percentage / 100.0) * radius_sum
+						candidate = (percentage / 100.0) * lower_bound
+
 						if candidate < distance:
 							lower_bound = candidate
 							break
 
 				upper_bound = 999.0
 
-				f.write(f"{int(atom_id[i])}\t{int(atom_id[j])}\t{int(resid[i])}\t{int(resid[j])}\t{lower_bound:.16f}\t{upper_bound:.16f}\t{atom_name[i]}\t{atom_name[j]}\t{resname[i]}\t{resname[j]}\n")
+				f.write(
+					f"{int(atom_id[i])}\t{int(atom_id[j])}\t"
+					f"{int(resid[i])}\t{int(resid[j])}\t"
+					f"{lower_bound:.16f}\t{upper_bound:.16f}\t"
+					f"{atom_name[i]}\t{atom_name[j]}\t"
+					f"{resname[i]}\t{resname[j]}\n"
+				)
 
 	print(f"[OK] Van der Waals distances saved to: {output_distance_file}")
 # -----------------------------------------------------------------------------------------------------
 def planar_peptide_distances(
 	tsv_structure_file: str | Path,
-	output_distance_file: str | Path
+	output_distance_file: str | Path,
+	atom_selection : str
 ) -> None:
 	"""
 	Generate planar peptide-group distance pairs from a filtered TSV.
@@ -377,8 +559,14 @@ def planar_peptide_distances(
 			_add_pair("O", r1, "H", r2)
 		# PRO-specific pairs involving residue r2
 		if r2_name == "PRO":
-			_add_pair("CA", r1, "CD", r2)
-			_add_pair("O", r1, "CD", r2)
+			if atom_selection == "backbone_plus_hydrogens":
+				_add_pair("CA", r1, "HD2", r2)
+				_add_pair("O", r1, "HD2", r2)
+				_add_pair("CA", r1, "HD3", r2)
+				_add_pair("O", r1, "HD3", r2)
+			else:
+				_add_pair("CA", r1, "CD", r2)
+				_add_pair("O", r1, "CD", r2)
 		
 	# Write output file: distances as tight bounds (d_l = d_u = distance)
 	with output_distance_file.open("w", encoding="utf-8") as f:
@@ -425,19 +613,53 @@ def _get_centered_interval(
 	vdw_threshold: float,
 	max_distance: float,
 ) -> tuple[float, float] | None:
-	"""Return a centered synthetic interval around the reference distance."""
-	residue_gap = abs(int(resid_i) - int(resid_j))
+	"""
+	Generate a synthetic interval around a reference distance using
+	rejection sampling, ensuring that dist is strictly inside the interval.
+
+	The interval is defined as:
+		lower_bound = sampled_distance - epsilon / 2
+		upper_bound = sampled_distance + epsilon / 2
+
+	and adjusted by physical constraints.
+
+	Returns
+	-------
+	tuple[float, float] | None
+		Valid interval (d_l, d_u) or None if constraints are infeasible.
+	"""
+
+	residue_gap = abs(resid_i - resid_j)
 	epsilon = epsilon_short if residue_gap <= 1 else epsilon_long
 
-	sampled_distance = float(np.random.normal(loc=dist, scale=epsilon / 8.0))
-
-	d_l = max(sampled_distance - epsilon / 2.0, vdw_threshold)
-	d_u = min(sampled_distance + epsilon / 2.0, max_distance)
-
-	if d_l > d_u:
+	# If the maximum allowed distance is already below dist, impossible
+	if max_distance <= dist:
 		return None
 
-	return d_l, d_u
+	# Adjust vdw threshold to ensure it can be below dist
+	adjusted_vdw_threshold = vdw_threshold
+
+	while adjusted_vdw_threshold >= dist:
+		adjusted_vdw_threshold *= 0.9
+		if adjusted_vdw_threshold <= 0.0:
+			return None
+
+	# Rejection sampling loop (guarantees correctness)
+	while True:
+		# Sample around the true distance
+		sampled_distance = float(np.random.normal(loc=dist,scale=epsilon / 8.0))
+
+		# Build symmetric interval around sampled value
+		lower_bound = sampled_distance - epsilon / 2.0
+		upper_bound = sampled_distance + epsilon / 2.0
+
+		# Apply physical constraints
+		d_l = max(lower_bound, adjusted_vdw_threshold)
+		d_u = min(upper_bound, max_distance)
+
+		# Accept only if dist is strictly inside
+		if d_l < dist < d_u:
+			return d_l, d_u
 
 def _get_experimental_interval(
 	dist: float,
@@ -531,7 +753,7 @@ def nmr_distance_constraints(
 	resid = df["resid"].to_numpy()
 	resname = df["resname"].str.strip().str.upper().to_numpy()
 	atom_name = df["atom_name"].str.strip().str.upper().to_numpy()
-
+	
 	candidate_indices = _get_nmr_candidate_indices(atom_name, atom_selection)
 	
 	with output_distance_file.open("w", encoding="utf-8") as f:
@@ -546,7 +768,7 @@ def nmr_distance_constraints(
 
 			for pos_j in range(pos_i):
 				j = int(candidate_indices[pos_j])
-
+				
 				dist = float(np.linalg.norm(coords[i] - coords[j]))
 
 				if distance_constraints == "precise":
@@ -555,7 +777,6 @@ def nmr_distance_constraints(
 				elif distance_constraints == "interval_centered":
 					if dist >= max_distance:
 						continue
-
 					interval = _get_centered_interval(dist, int(resid[i]), int(resid[j]), epsilon_short, epsilon_long, vdw_threshold, max_distance)
 				
 				else:
@@ -640,10 +861,17 @@ def talos_n_like(
 
 		return angle_width
 
-	def sample_angle_interval(base_angle: float | None, angle_width: float) -> tuple[float, float]:
+	def sample_angle_interval(
+		base_angle: float | None,
+		angle_width: float
+	) -> tuple[float, float]:
 		"""
-		Build a torsion interval from a structural torsion angle.
+		Build a torsion interval using rejection sampling, ensuring that
+		base_angle is strictly inside the interval.
+
+		The interval is represented by (center, radius).
 		"""
+
 		if base_angle is None:
 			return full_range_angle()
 
@@ -652,9 +880,19 @@ def talos_n_like(
 
 		angle_radius = angle_width / 2.0
 		angle_sigma = angle_width / 8.0
-		angle_center = wrap_angle_deg(float(np.random.normal(loc=base_angle, scale=angle_sigma)))
 
-		return angle_center, angle_radius
+		base_angle = wrap_angle_deg(base_angle)
+
+		while True:
+			# Sample a candidate center
+			angle_center = wrap_angle_deg(float(np.random.normal(loc=base_angle, scale=angle_sigma)))
+
+			# Compute shortest angular distance (periodic)
+			diff = wrap_angle_deg(angle_center - base_angle)
+			
+			# Accept only if base_angle lies strictly inside interval
+			if abs(diff) < angle_radius:
+				return angle_center, angle_radius
 
 	# ---------------------------
 	# Parameter checks

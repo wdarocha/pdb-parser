@@ -70,7 +70,7 @@ def parser(
 	# ------------------------------------------------------------------
 	dcfile_3 = tmp_dir / "distance_constraints_3.dat"
 
-	planar_peptide_distances(tsv_structure_file, dcfile_3)
+	planar_peptide_distances(tsv_structure_file, dcfile_3, params.get("atom_selection", "").strip().lower())
 
 	# ------------------------------------------------------------------
 	# Distance constraints 4: NMR (NOE) constraints

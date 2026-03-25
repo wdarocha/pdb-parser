@@ -10,7 +10,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Wagner Alan Aparecido da Rocha" }]
 
-dependencies = []
+dependencies = [
+    "numpy",
+    "pandas",
+    "requests",
+    "MDAnalysis",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

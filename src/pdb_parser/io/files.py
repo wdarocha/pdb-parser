@@ -101,7 +101,7 @@ def save_cliques_from_matrix_T(
 
 	Expected column format
 	----------------------
-	%d %d %d %d %d %.4f %.4f
+	%d %d %d %d %d %.6f %.6f
 
 	Parameters
 	----------
@@ -112,7 +112,7 @@ def save_cliques_from_matrix_T(
 	"""
 
 	# Format specification for each column
-	fmt = "%d %d %d %d %d %.4f %.4f"
+	fmt = "%d %d %d %d %d %.6f %.6f"
 
 	# Save matrix efficiently
 	np.savetxt(filepath, T, fmt=fmt)

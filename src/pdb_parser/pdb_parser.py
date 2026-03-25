@@ -26,7 +26,6 @@ from pdb_parser.utils import *
 from pdb_parser.io import *
 from pdb_parser.reordering import *
 from pdb_parser.pipeline import *
-#from pdb_parser.geometry import *
 # -----------------------------------------------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
 	p = argparse.ArgumentParser(

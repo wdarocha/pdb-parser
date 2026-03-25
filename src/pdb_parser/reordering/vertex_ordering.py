@@ -929,9 +929,9 @@ def build_first_residue_pattern(
 		ha_atom = _pick_first_available_atom(available_atom_names, HA_CANDIDATES, "HA")
 
 		return [
-			_build_row([None, None, None, "H3"], res1_id, 1),
-			_build_row([None, None, "H3", "H2"], res1_id, 1),
-			_build_row([None, "H3", "H2", hn_atom], res1_id, 1),
+			_build_row([None, None, None, "H3"], res1_id, 0),
+			_build_row([None, None, "H3", "H2"], res1_id, 0),
+			_build_row([None, "H3", "H2", hn_atom], res1_id, 0),
 			_build_row(["H3", "H2", hn_atom, "N"], res1_id, 1),
 			_build_row(["H2", hn_atom, "N", "CA"], res1_id, 1),
 			_build_row([hn_atom, "N", "CA", ha_atom], res1_id, 2),
@@ -944,9 +944,9 @@ def build_first_residue_pattern(
 		ha_atom = _pick_first_available_atom(available_atom_names, HA_CANDIDATES, "HA")
 
 		return [
-			_build_row([None, None, None, hm_atom], res1_id, 1),
-			_build_row([None, None, hm_atom, hn_atom], res1_id, 1),
-			_build_row([None, hm_atom, hn_atom, "N"], res1_id, 1),
+			_build_row([None, None, None, hm_atom], res1_id, 0),
+			_build_row([None, None, hm_atom, hn_atom], res1_id, 0),
+			_build_row([None, hm_atom, hn_atom, "N"], res1_id, 0),
 			_build_row([hm_atom, hn_atom, "N", "CA"], res1_id, 1),
 			_build_row([hn_atom, "N", "CA", ha_atom], res1_id, 2),
 			_build_row(["N", "CA", ha_atom, "C"], res1_id, 1),
@@ -957,9 +957,9 @@ def build_first_residue_pattern(
 		hn_atom = _pick_first_available_atom(available_atom_names, HN_CANDIDATES, "HN")
 
 		return [
-			_build_row([None, None, None, "N"], res1_id, 1),
-			_build_row([None, None,"N", "CA",], res1_id, 1),
-			_build_row([None, "N", "CA", "C"], res1_id, 1),
+			_build_row([None, None, None, "N"], res1_id, 0),
+			_build_row([None, None,"N", "CA",], res1_id, 0),
+			_build_row([None, "N", "CA", "C"], res1_id, 0),
 			_build_row(["N", "CA", "C", ha_atom], res1_id, 1),
 			_build_row([ha_atom, "CA", "N", hn_atom], res1_id, 2),
 		]
@@ -1139,7 +1139,7 @@ def update_torsion_matrix(
 		
 	for row in df_X.itertuples(index=False):
 		atom_index = int(row[0])
-		atom_name = str(row[1])
+		atom_name  = str(row[1])
 		residue_id = int(row[2])
 
 		atom_to_name[atom_index] = atom_name

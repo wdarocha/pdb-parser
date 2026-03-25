@@ -235,16 +235,29 @@ percentage_backbone_torsion_angles: 100.0
 
 ------------------------------------------------------------------------
 
-## ⚙️ Installation instructions
+## ⚙️ Installation
 
 Clone the repository:
 
     git clone https://github.com/wdarocha/pdb-parser.git
     cd pdb-parser
 
-Install in editable mode:
+Create and activate a virtual environment if desired, then install the package in editable mode:
 
     pip install -e .
+
+The package depends on the following Python libraries:
+
+- `MDAnalysis`
+- `numpy`
+- `pandas`
+- `requests`
+
+With the current `pyproject.toml`, these dependencies are installed automatically when running `pip install -e .`.
+
+If you prefer to install them manually first, you can use:
+
+    pip install MDAnalysis numpy pandas requests
 
 ------------------------------------------------------------------------
 
