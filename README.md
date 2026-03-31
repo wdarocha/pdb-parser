@@ -241,7 +241,7 @@ and the resulting interval is
 $$
 \mathcal{D}_{ij} =
 \left[
-\max\left(d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ v_{\mathrm{vdWrHH}}\right),
+\max\left(d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ \mathrm{vdW}_t\right),
 \
 \min\left(d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ d_{\mathrm{max}}\right)
 \right]
@@ -260,7 +260,7 @@ residues.
 |-----------|---------|
 | `epsilon_short` | interval width for atoms in the same or adjacent residues |
 | `epsilon_long` | interval width for atoms in non-adjacent residues |
-| `vdWr_HH` | minimum allowed lower bound for distance intervals |
+| `vdW_HH` | minimum allowed lower bound for distance intervals |
 | `max_distance` | maximum allowed upper bound for distance intervals |
 
 ------------------------------------------------------------------------
