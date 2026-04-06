@@ -72,3 +72,4 @@ def ensure_nmr_model_chain_ready(
 	# 4) Extract (this also validates gaps if allow_gaps=False)
 	return extract_model_chain(p, model_number, chain_id, allow_gaps=allow_gaps)
 # -----------------------------------------------------------------------------------------------------
+

@@ -254,3 +254,4 @@ def convert_tsv_angular_to_pdb_format(
 			)
 	print(f"[OK] Angular constraint file saved to: {output_file}")
 # -----------------------------------------------------------------------------------------------------
+

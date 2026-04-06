@@ -118,3 +118,4 @@ def save_cliques_from_matrix_T(
 	np.savetxt(filepath, T, fmt=fmt)
 	print(f"[OK] Cliques file saved to: {filepath}")
 # -----------------------------------------------------------------------------------------------------
+

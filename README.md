@@ -537,3 +537,4 @@ Developed and maintained by [Wagner Alan Aparecido da Rocha](https://github.com/
 ## 🙏 Acknowledgments
 
 Special thanks to [Leonardo D.Secchin](https://github.com/leonardosecchin) for the valuable support provided during the development of the code.
+
