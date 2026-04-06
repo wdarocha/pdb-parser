@@ -204,13 +204,58 @@ Specifies which chain in the selected model will be processed. Only atoms belong
 
 #### Atom selection strategy
 
-Defines which atoms are extracted from the PDB structure.
+Defines which atoms are extracted from the PDB structure to build the
+protein graph used by the parser and by the reordering stage.
 
 Currently supported option:
 
 | option | description |
 |-------|-------------|
-| `backbone_plus_hydrogens` | backbone atoms (N, CA, C) plus hydrogens directly bonded to them (H, HA) |
+| `backbone_plus_hydrogens` | backbone atoms `N`, `CA`, `C` plus the directly attached hydrogens needed by the article-oriented iDDGP construction |
+
+------------------------------------------------------------------------
+
+#### Protein-chain model used for instance generation
+
+The current workflow follows the protein-chain model described in the
+manuscript section *Generating iDDGP Instances from Protein Structures*.
+For residue `i`, the backbone is represented by the triplet
+`{N_i, Cα_i, C_i}` and the backbone torsions are
+
+- `phi_i := C_{i-1} - N_i - Cα_i - C_i`
+- `psi_i := N_i - Cα_i - C_i - N_{i+1}`
+- `omega_i := Cα_{i-1} - C_{i-1} - N_i - Cα_i`
+
+Only the backbone is modeled explicitly. Side-chain atoms are not part of
+the generated instances. To improve triangulation, the parser keeps the
+hydrogens attached to `N` and `CA`, with residue-specific handling:
+
+- standard residues use one backbone amide hydrogen among `H`, `H1`, `H2`, or `H3`, plus `HA`
+- glycine uses `HA2` when available, otherwise `HA3`
+- proline has no backbone amide hydrogen, so one of `HD2` or `HD3` is used as the `HN` surrogate, together with `HA`
+
+The reorder stage resolves these concrete atom names to the logical labels
+used by the construction:
+
+- `HN -> H1`, `H`, `HD2`, or `HD3`
+- `HA -> HA`, `HA2`, or `HA3`
+
+------------------------------------------------------------------------
+
+#### Constraint families used to build one instance
+
+For each processed chain, the final distance-constraint file `I_*` is
+obtained by merging several families of restraints:
+
+- exact covalent and local geometric distances induced by the filtered backbone topology
+- exact peptide-plane distances between consecutive residues under the planar peptide-group assumption
+- optional van der Waals lower bounds
+- NMR-like inter-hydrogen distance intervals generated from the reference PDB coordinates
+- distance intervals induced by sampled backbone torsion intervals
+
+This matches the article-oriented workflow: backbone geometry is treated as
+the structural scaffold, while uncertain NMR information is represented as
+interval data.
 
 ------------------------------------------------------------------------
 
@@ -241,13 +286,13 @@ and the resulting interval is
 $$
 \mathcal{D}_{ij} =
 \left[
-\max\left(d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ \mathrm{vdW}_t\right),
+\max\left(d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ \mathrm{vdwr\_hh}\right),
 \
 \min\left(d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ d_{\mathrm{max}}\right)
 \right]
 $$
 
-where the interval width satisfies $\varepsilon_{ij} = 8\sigma$, corresponding to $\pm4\sigma$ around the mean.
+where the interval width satisfies $\varepsilon_{ij} = 8\sigma$, corresponding to $\pm4\sigma$ around the mean, and `vdwr_hh` is the lower-bound parameter from `params.cfg`.
 
 ------------------------------------------------------------------------
 
@@ -260,7 +305,7 @@ residues.
 |-----------|---------|
 | `epsilon_short` | interval width for atoms in the same or adjacent residues |
 | `epsilon_long` | interval width for atoms in non-adjacent residues |
-| `vdW_HH` | minimum allowed lower bound for distance intervals |
+| `vdwr_hh` | lower-bound floor used for hydrogen-hydrogen distance intervals |
 | `max_distance` | maximum allowed upper bound for distance intervals |
 
 ------------------------------------------------------------------------
@@ -303,6 +348,10 @@ $$
 
 where `torsion_angle_width` defines the total interval width. This corresponds to $\Delta\tau = 8\sigma$
 
+The parser writes these sampled `omega/phi/psi` intervals to `A_*`. It then
+converts them to additional distance intervals and merges them into the
+final `I_*` file.
+
 ------------------------------------------------------------------------
 
 ### Backbone torsion selection
@@ -330,7 +379,7 @@ distance_constraints: interval_centered
 epsilon_short: 1.0
 epsilon_long: 2.0
 max_distance: 5.0
-vdWr_HH: 2.4
+vdwr_hh: 1.8
 vdw_constraints: yes
 torsion_angle_width: 50.0
 percentage_backbone_torsion_angles: 100.0
@@ -351,6 +400,35 @@ Currently supported parameters:
 | `order_id` | ordering choice; supported values are `1` and `9` |
 
 For `order_id`, the values `1` and `9` generate a constant DDGP ordering vector filled with that identifier for all internal residues. In the current article-oriented interface, `order_id=1` is the ordering used in `A hybrid combinatorial-continuous strategy for solving molecular distance geometry problems` (arXiv:2510.19970), while `order_id=9` is the ordering used in `An Angle-Based Algorithmic Framework for the Interval Discretizable Distance Geometry Problem` (arXiv:2508.09143).
+
+### How the reordering stage builds the DDGP/iDDGP instance
+
+The parser-stage `X_*` file preserves the filtered atom list in PDB order.
+The reordering stage is what turns that output into a DDGP-compatible
+instance.
+
+For the first residue, the code chooses one initialization pattern
+according to the hydrogen names available in that residue, covering the
+expected N-terminus variants (`H3`, `H2`, `H1`, `H`) and the proline/glycine
+special cases discussed above.
+
+For the remaining residues, atoms are appended residue by residue using a
+fixed five-atom internal pattern controlled by `order_id`.
+
+For the current public interface, the two documented choices are:
+
+- `order_id=1`: internal residues follow the pattern `N, CA, C, HN, HA`
+- `order_id=9`: internal residues follow the hc-style pattern `HN, CA, N, HA, C`, matching the manuscript description
+
+In both cases, the concrete aliases `HN -> H/H1/HD2/HD3` and
+`HA -> HA/HA2/HA3` are resolved from the actual residue contents. In
+practice, the first residue may contain N-terminus variants such as `H3`,
+`H2`, and `H1`, while non-terminal non-proline residues are expected to
+provide `H` for the amide-hydrogen position.
+
+Besides the reordered `X_*` and `I_*` files, this stage also writes the
+clique matrix `T_*`, which is the discrete structure used by the reordered
+instance.
 
 ### Instance reordering configuration example
 
