@@ -104,8 +104,10 @@ def extract_model_chain(
 	u = mda.Universe(str(pdb_path), multiframe=True)
 	u.trajectory[model_number - 1]
 	
-	# Select only standard protein atoms
+	# Select only protein atoms from the requested chain/model
 	selection = u.select_atoms(f"segid {chain_id} and protein")
+	# Drop any HETATM records that may still be present in the protein selection
+	selection = selection.select_atoms("record_type ATOM")
 	
 	if selection.n_atoms == 0:
 		raise ValueError(f"Chain {chain_id} not found or contains no protein atoms in {pdb_path}")
@@ -120,4 +122,3 @@ def extract_model_chain(
 	
 	return selection
 # -----------------------------------------------------------------------------------------------------
-
