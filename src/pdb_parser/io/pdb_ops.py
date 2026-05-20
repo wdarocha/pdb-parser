@@ -22,6 +22,56 @@ def _normalize_pdb_id(pdb_id: str) -> str:
 		raise ValueError(f"Invalid PDB id '{pdb_id}'. Expected 4 alphanumeric chars.")
 	return pid
 # -----------------------------------------------------------------------------------------------------
+def _normalize_chain_id(chain_id: str) -> str:
+	"""Return a stripped chain identifier and reject empty values."""
+	cid = str(chain_id).strip()
+	if not cid:
+		raise ValueError("chain_id cannot be empty.")
+	return cid
+# -----------------------------------------------------------------------------------------------------
+def _strip_string_array(values: Iterable[object]) -> np.ndarray:
+	"""Return a NumPy array of stripped string values preserving length."""
+	return np.array([str(value).strip() for value in values], dtype=object)
+# -----------------------------------------------------------------------------------------------------
+def _get_protein_atom_group(universe: mda.Universe) -> AtomGroup:
+	"""Return protein atoms from the current frame, keeping only ATOM records when available."""
+	protein_atoms = universe.select_atoms("protein")
+	try:
+		protein_atoms = protein_atoms.select_atoms("record_type ATOM")
+	except Exception:
+		pass
+	return protein_atoms
+# -----------------------------------------------------------------------------------------------------
+def _list_chain_ids_from_atom_group(atom_group: AtomGroup) -> list[str]:
+	"""Collect non-empty chain identifiers from both segid and chainID fields."""
+	chain_ids: set[str] = set()
+
+	if hasattr(atom_group, "segids"):
+		chain_ids.update(text for text in _strip_string_array(atom_group.segids) if text)
+
+	if hasattr(atom_group, "chainIDs"):
+		chain_ids.update(text for text in _strip_string_array(atom_group.chainIDs) if text)
+
+	return sorted(chain_ids)
+# -----------------------------------------------------------------------------------------------------
+def _select_chain_atoms(atom_group: AtomGroup, chain_id: str) -> AtomGroup:
+	"""Select a chain from an AtomGroup using segid first and chainID second."""
+	cid = _normalize_chain_id(chain_id)
+
+	if hasattr(atom_group, "segids"):
+		segids = _strip_string_array(atom_group.segids)
+		match_indices = np.flatnonzero(segids == cid)
+		if match_indices.size > 0:
+			return atom_group[match_indices]
+
+	if hasattr(atom_group, "chainIDs"):
+		chain_ids = _strip_string_array(atom_group.chainIDs)
+		match_indices = np.flatnonzero(chain_ids == cid)
+		if match_indices.size > 0:
+			return atom_group[match_indices]
+
+	return atom_group[:0]
+# -----------------------------------------------------------------------------------------------------
 def download_pdb(pdb_id: str, data_dir: str | Path) -> Path:
 	"""Download a PDB file (text) from RCSB if not present; return local Path.
 	
@@ -75,15 +125,9 @@ def list_chains_for_model(pdb_path: str | Path, model_number: int) -> list[str]:
 	
 	# convert to 0-based for MDAnalysis
 	u.trajectory[model_number - 1]
-	
-	if hasattr(u.atoms, "segids"):
-		chains = set(u.atoms.segids)
-	elif hasattr(u.atoms, "chainIDs"):
-		chains = set(u.atoms.chainIDs)
-	else:
-		chains = set(atom.segid for atom in u.atoms)
-	
-	return sorted(c for c in chains if c is not None and str(c).strip() != "")
+
+	protein_atoms = _get_protein_atom_group(u)
+	return _list_chain_ids_from_atom_group(protein_atoms)
 # -----------------------------------------------------------------------------------------------------
 def extract_model_chain(
 	pdb_path: str | Path,
@@ -101,16 +145,22 @@ def extract_model_chain(
 	ValueError
 		If the chain is not found or gaps exist (and allow_gaps=False).
 	"""
+	chain_id = _normalize_chain_id(chain_id)
 	u = mda.Universe(str(pdb_path), multiframe=True)
+	nmodels = len(u.trajectory)
+	if not (1 <= model_number <= nmodels):
+		raise ValueError(f"model_number out of range: {model_number} (1..{nmodels})")
 	u.trajectory[model_number - 1]
-	
-	# Select only protein atoms from the requested chain/model
-	selection = u.select_atoms(f"segid {chain_id} and protein")
-	# Drop any HETATM records that may still be present in the protein selection
-	selection = selection.select_atoms("record_type ATOM")
+
+	protein_atoms = _get_protein_atom_group(u)
+	selection = _select_chain_atoms(protein_atoms, chain_id)
 	
 	if selection.n_atoms == 0:
-		raise ValueError(f"Chain {chain_id} not found or contains no protein atoms in {pdb_path}")
+		available_chains = _list_chain_ids_from_atom_group(protein_atoms)
+		raise ValueError(
+			f"Chain {chain_id} not found or contains no protein atoms in {pdb_path}. "
+			f"Available chain identifiers: {', '.join(available_chains)}"
+		)
 	
 	resids = np.sort(np.unique(selection.residues.resids))
 	

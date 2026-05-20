@@ -50,6 +50,7 @@ def save_distances_from_df_structure(
 
 			f.write(
 				"%5d %5d %6d %6d %20.16f %20.16f %4.4s %4.4s %s %s\n"
+				#"%5d %5d %6d %6d %20.6f %20.6f %4.4s %4.4s %s %s\n"
 				% (
 					int(row[0]),
 					int(row[1]),

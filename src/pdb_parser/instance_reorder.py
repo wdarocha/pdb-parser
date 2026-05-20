@@ -26,7 +26,7 @@ from pdb_parser.pipeline import reorder_instance
 from pdb_parser.utils import read_params, read_pdb_ids
 
 
-SUPPORTED_ORDER_IDS = {1, 9}
+SUPPORTED_ORDER_IDS = set(range(1, 11))
 
 
 # -----------------------------------------------------------------------------------------------------
@@ -55,10 +55,10 @@ def parse_order_id(raw_value: str) -> int:
 	try:
 		order_id = int(raw_value.strip())
 	except ValueError as exc:
-		raise ValueError("Invalid order_id. Supported values are 1 and 9.") from exc
+		raise ValueError("Invalid order_id. Supported values are integers from 1 to 10.") from exc
 
 	if order_id not in SUPPORTED_ORDER_IDS:
-		raise ValueError("Invalid order_id. Supported values are 1 and 9.")
+		raise ValueError("Invalid order_id. Supported values are integers from 1 to 10.")
 
 	return order_id
 

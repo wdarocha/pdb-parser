@@ -35,7 +35,7 @@ def ensure_nmr_model_chain_ready(
 	model_number : int
 		1-based model index to use.
 	chain_id : str
-		Chain (segid) to extract from the selected model.
+		Chain identifier (segid or chainID) to extract from the selected model.
 	allow_gaps : bool
 		If False, raise if residue id sequence has gaps. If True, ignore gaps.
 	
@@ -72,4 +72,3 @@ def ensure_nmr_model_chain_ready(
 	# 4) Extract (this also validates gaps if allow_gaps=False)
 	return extract_model_chain(p, model_number, chain_id, allow_gaps=allow_gaps)
 # -----------------------------------------------------------------------------------------------------
-

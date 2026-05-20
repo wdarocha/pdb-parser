@@ -1,13 +1,14 @@
 """CLI for parsing PDB structures and writing output files.
 
 Usage:
-	python -m pdb_parser.pdb_parser <pdb_ids.dat> <params.cfg> <pdb_data_dir> <out_dir>
+	python -m pdb_parser.pdb_parser <pdb_ids.dat> <params.cfg> <pdb_data_dir> <seed_dir> <out_dir>
 
 Arguments
 ---------
 pdb_ids.dat	: text file with one PDB id per line (comments with '#')
 params.cfg	: simple key=value file (comments with '#')
 pdb_data_dir	: pdb data directory to be created if missing
+seed_dir	: seed directory to be created if missing
 out_dir		: output directory to be created if missing
 """
 
@@ -34,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
 	p.add_argument("pdb_ids_file", type=Path, help="Path to a file with one PDB id per line.")
 	p.add_argument("params_file", type=Path, help="Path to a simple key=value params file.")
 	p.add_argument("pdb_data_dir", type=Path, help="PDB data directory to create if missing.")
+	p.add_argument("seed_dir", type=Path, help="Seed directory to create if missing.")
 	p.add_argument("out_dir", type=Path, help="Output directory to create if missing.")
 	return p
 
@@ -53,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
 		pdb_ids = read_pdb_ids(args.pdb_ids_file)
 		params = read_params(args.params_file)
 		pdb_data_dir = ensure_dir(args.pdb_data_dir)
+		seed_dir = ensure_dir(args.seed_dir)
 		out_dir = ensure_dir(args.out_dir)
 	except Exception as exc:
 		print(f"[ERROR] {exc}", file=sys.stderr)
@@ -62,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
 		print_job_banner(pdb_id)
 		try:
 			download_pdb(pdb_id, pdb_data_dir)
-			parser(params, pdb_data_dir, out_dir, pdb_id, True)
+			parser(params, pdb_data_dir, seed_dir, out_dir, pdb_id, False)
 		except Exception as exc:
 			print(f"[{pdb_id}] Skipped: {exc}")
 			continue
@@ -73,4 +76,3 @@ def main(argv: list[str] | None = None) -> int:
 # -----------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
 	raise SystemExit(main())
-

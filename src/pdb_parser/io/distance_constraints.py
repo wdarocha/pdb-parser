@@ -4,13 +4,15 @@ from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
 from typing import Iterable, Tuple, Set, Dict
+from pdb_parser.io.files import read_space_separated_file, save_distances_from_df_structure
+from pdb_parser.io.pdb_ops import extract_model_chain
 from pdb_parser.utils import ensure_dir
 from pdb_parser.geometry.distance_geometry import torsion_angle_2_endpoint_distance
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import dijkstra as csgraph_dijkstra
 
 import numpy as np
 import pandas as pd
-import MDAnalysis as mda
-
 from MDAnalysis.lib.distances import calc_dihedrals
 
 # -----------------------------------------------------------------------------------------------------
@@ -612,6 +614,7 @@ def _get_centered_interval(
 	epsilon_long: float,
 	vdw_threshold: float,
 	max_distance: float,
+	rng: np.random.Generator | None = None,
 ) -> tuple[float, float] | None:
 	"""
 	Generate a synthetic interval around a reference distance using
@@ -638,6 +641,7 @@ def _get_centered_interval(
 
 	# Adjust vdw threshold to ensure it can be below dist
 	adjusted_vdw_threshold = vdw_threshold
+	rng = rng if rng is not None else np.random.default_rng()
 
 	while adjusted_vdw_threshold >= dist:
 		adjusted_vdw_threshold *= 0.9
@@ -647,7 +651,7 @@ def _get_centered_interval(
 	# Rejection sampling loop (guarantees correctness)
 	while True:
 		# Sample around the true distance
-		sampled_distance = float(np.random.normal(loc=dist,scale=epsilon / 8.0))
+		sampled_distance = float(rng.normal(loc=dist, scale=epsilon / 8.0))
 
 		# Build symmetric interval around sampled value
 		lower_bound = sampled_distance - epsilon / 2.0
@@ -700,6 +704,7 @@ def nmr_distance_constraints(
 	noe_medium: float,
 	noe_weak: float,
 	vdw_threshold: float,
+	rng: np.random.Generator | None = None,
 ) -> None:
 	"""Generate NMR-derived distance constraints from a TSV structure file.
 
@@ -737,6 +742,7 @@ def nmr_distance_constraints(
 	"""
 	distance_constraints = (distance_constraints or "").strip().lower()
 	valid_modes = {"precise", "interval_centered", "interval_experimental"}
+	rng = rng if rng is not None else np.random.default_rng()
 
 	if distance_constraints not in valid_modes:
 		raise ValueError(f"Unsupported distance_constraints mode: {distance_constraints!r}. Expected one of {sorted(valid_modes)}.")
@@ -760,7 +766,7 @@ def nmr_distance_constraints(
 		f.write("atom_id_i\tatom_id_j\tresid_i\tresid_j\td_l\td_u\tatom_name_i\tatom_name_j\tresname_i\tresname_j\n")
 
 		if len(candidate_indices) == 0:
-			print(f"[OK] NMR distance table (mode={distance_constraints}) saved to (empty): {out_path}")
+			print(f"[OK] NMR distance table (mode={distance_constraints}) saved to (empty): {output_distance_file}")
 			return
 
 		for pos_i in range(len(candidate_indices)):
@@ -777,7 +783,16 @@ def nmr_distance_constraints(
 				elif distance_constraints == "interval_centered":
 					if dist >= max_distance:
 						continue
-					interval = _get_centered_interval(dist, int(resid[i]), int(resid[j]), epsilon_short, epsilon_long, vdw_threshold, max_distance)
+					interval = _get_centered_interval(
+						dist,
+						int(resid[i]),
+						int(resid[j]),
+						epsilon_short,
+						epsilon_long,
+						vdw_threshold,
+						max_distance,
+						rng,
+					)
 				
 				else:
 					interval = _get_experimental_interval(dist, noe_strong, noe_medium, noe_weak, vdw_threshold)
@@ -809,11 +824,12 @@ def talos_n_like(
 	chosen_model: int,
 	chosen_chain: str,
 	output_angular_file: str | Path,
-	distance_constraints: str,
 	omega_angle_width: float,
 	phi_angle_width: float,
 	psi_angle_width: float,
 	percentage_backbone_torsion_angles: float,
+	angle_rng: np.random.Generator | None = None,
+	mask_rng: np.random.Generator | None = None,
 ) -> None:
 	"""
 	Generate TALOS-N-like omega/phi/psi intervals from a PDB structure using
@@ -823,20 +839,14 @@ def talos_n_like(
 	- omega is always treated as detected whenever it can be computed
 	- phi and psi are randomly split into detected/full-range according to
 	  percentage_backbone_torsion_angles
-	- If a valid torsion can be computed, the central value is sampled from
-	  Normal(mean = structural angle [deg], sigma = angle_width / 8),
-	  and the interval radius is angle_width / 2
-	- If a given torsion cannot be computed, that angle is encoded as a
-	  full-range interval
+		- If a valid torsion can be computed, the central value is sampled from
+		  Normal(mean = structural angle [deg], sigma = angle_width / 8),
+		  and the interval radius is angle_width / 2
+		- If a given torsion cannot be computed, that angle is encoded as a
+		  full-range interval
 
-	The distance_constraints mode is interpreted as follows:
-	- precise:
-		all torsion widths are forced to 0°, producing zero-width intervals
-	- interval_centered / interval_experimental:
-		the provided torsion widths are used as given
-
-	Output format (TSV)
-	-------------------
+		Output format (TSV)
+		-------------------
 	resid
 	resname
 	omega_center
@@ -885,7 +895,7 @@ def talos_n_like(
 
 		while True:
 			# Sample a candidate center
-			angle_center = wrap_angle_deg(float(np.random.normal(loc=base_angle, scale=angle_sigma)))
+			angle_center = wrap_angle_deg(float(angle_rng.normal(loc=base_angle, scale=angle_sigma)))
 
 			# Compute shortest angular distance (periodic)
 			diff = wrap_angle_deg(angle_center - base_angle)
@@ -897,20 +907,12 @@ def talos_n_like(
 	# ---------------------------
 	# Parameter checks
 	# ---------------------------
-	distance_constraints = (distance_constraints or "").strip().lower()
-	valid_modes = {"precise", "interval_centered", "interval_experimental"}
-
-	if distance_constraints not in valid_modes:
-		raise ValueError(f"Unsupported distance_constraints value: {distance_constraints!r}. Expected one of {sorted(valid_modes)}.")
+	angle_rng = angle_rng if angle_rng is not None else np.random.default_rng()
+	mask_rng = mask_rng if mask_rng is not None else np.random.default_rng()
 
 	omega_angle_width = sanitize_angle_width(omega_angle_width, "omega_angle_width")
 	phi_angle_width = sanitize_angle_width(phi_angle_width, "phi_angle_width")
 	psi_angle_width = sanitize_angle_width(psi_angle_width, "psi_angle_width")
-
-	if distance_constraints == "precise":
-		omega_angle_width = 0.0
-		phi_angle_width = 0.0
-		psi_angle_width = 0.0
 
 	try:
 		percentage_backbone_torsion_angles = float(percentage_backbone_torsion_angles)
@@ -927,31 +929,12 @@ def talos_n_like(
 	# ---------------------------
 	# Load PDB and select chain
 	# ---------------------------
-	universe = mda.Universe(str(pdb_file))
-
-	if chosen_model is not None:
-		frame_index = int(chosen_model) - 1
-		if frame_index < 0 or frame_index >= len(universe.trajectory):
-			raise ValueError(f"chosen_model={chosen_model} is out of range for trajectory with {len(universe.trajectory)} frame(s).")
-		universe.trajectory[frame_index]
-
-	chain_residues = None
-	selection_candidates: list[str] = []
-
-	if chosen_chain:
-		selection_candidates.append(f"protein and segid {chosen_chain}")
-		selection_candidates.append(f"protein and chainid {chosen_chain}")
-
-	selection_candidates.append("protein")
-
-	for selection in selection_candidates:
-		atom_group = universe.select_atoms(selection)
-		if len(atom_group.residues) > 0:
-			chain_residues = atom_group.residues
-			break
-
-	if chain_residues is None or len(chain_residues) == 0:
-		raise ValueError(f"No residues found for chain '{chosen_chain}' in structure '{pdb_file}'.")
+	chain_residues = extract_model_chain(
+		pdb_file,
+		int(chosen_model),
+		chosen_chain,
+		allow_gaps=True,
+	).residues
 
 	# ---------------------------
 	# Build backbone coordinate arrays
@@ -1038,7 +1021,7 @@ def talos_n_like(
 	all_indices = np.arange(n_residues, dtype=int)
 
 	if n_full_range > 0:
-		full_range_indices = set(np.random.choice(all_indices, size=n_full_range, replace=False))
+		full_range_indices = set(mask_rng.choice(all_indices, size=n_full_range, replace=False))
 	else:
 		full_range_indices = set()
 
@@ -1365,7 +1348,7 @@ def backbone_angular_interval_to_distance_interval(
 
 	print(f"[OK] Backbone angular intervals converted to distance intervals saved to: {output_distance_file}")
 # -----------------------------------------------------------------------------------------------------
-def merge_distance_constraint_files(files_dir: str | Path, instance_file: str | Path) -> Path:
+def merge_distance_constraint_files(files_dir: str | Path, instance_file: str | Path) -> None:
 	"""
 	Merge all files named 'distance_constraints_*.dat' in output_dir into a single
 	consistent interval table.
@@ -1482,5 +1465,91 @@ def merge_distance_constraint_files(files_dir: str | Path, instance_file: str | 
 	
 	print(f"[OK] Merged distance constraints saved to: {instance_file}")
 # -----------------------------------------------------------------------------------------------------
+def tightening_upper_bounds(instance_file: str | Path) -> None:
+	"""
+	Tighten the upper bounds (column 6 / d_u) of an instance file by replacing
+	each value with the shortest-path distance induced by the finite upper-bound
+	graph.
 
+	The graph is built from:
+	- column 1: atom_id_i
+	- column 2: atom_id_j
+	- column 6: d_u
 
+	Only edges with d_u <= 998 are kept in the adjacency list. The resulting
+	undirected positive-weight graph is used to compute all-pairs shortest-path
+	distances via repeated Dijkstra runs. The computed shortest-path distance for
+	each pair already present in df_I replaces the original d_u value, and the
+	result overwrites the input file in place.
+	"""
+	instance_file = Path(instance_file)
+	output_instance_file = instance_file.with_name(f"{instance_file.stem}_0{instance_file.suffix}")
+	
+	df_I = read_space_separated_file(instance_file)
+
+	if df_I.empty:
+		#save_distances_from_df_structure(df_I, instance_file)
+		save_distances_from_df_structure(df_I, output_instance_file)
+		return
+
+	if df_I.shape[1] < 6:
+		raise ValueError(
+			f"Expected at least 6 columns in distance file {instance_file}, found {df_I.shape[1]}."
+		)
+
+	vertices: set[int] = set()
+	edge_weights: dict[tuple[int, int], float] = {}
+
+	for row in df_I.itertuples(index=False):
+		vertex_i = int(row[0])
+		vertex_j = int(row[1])
+		upper_bound = float(row[5])
+
+		vertices.add(vertex_i)
+		vertices.add(vertex_j)
+
+		if upper_bound > 998.0:
+			continue
+
+		edge_key = (vertex_i, vertex_j) if vertex_i <= vertex_j else (vertex_j, vertex_i)
+		current_weight = edge_weights.get(edge_key)
+
+		if current_weight is None or upper_bound < current_weight:
+			edge_weights[edge_key] = upper_bound
+
+	vertex_order = sorted(vertices)
+	vertex_to_index = {
+		vertex: index
+		for index, vertex in enumerate(vertex_order)
+	}
+
+	row_indices: list[int] = []
+	col_indices: list[int] = []
+	data: list[float] = []
+
+	for (vertex_i, vertex_j), weight in edge_weights.items():
+		index_i = vertex_to_index[vertex_i]
+		index_j = vertex_to_index[vertex_j]
+
+		row_indices.extend((index_i, index_j))
+		col_indices.extend((index_j, index_i))
+		data.extend((weight, weight))
+
+	graph = csr_matrix((data, (row_indices, col_indices)), shape=(len(vertex_order), len(vertex_order)), dtype=float)
+
+	all_pairs_shortest_paths = csgraph_dijkstra(graph, directed=False, return_predecessors=False)
+
+	for row_index, row in df_I.iterrows():
+		vertex_i = int(row[0])
+		vertex_j = int(row[1])
+		index_i = vertex_to_index[vertex_i]
+		index_j = vertex_to_index[vertex_j]
+		shortest_distance = float(all_pairs_shortest_paths[index_i, index_j])
+
+		if not np.isfinite(shortest_distance):
+			raise ValueError(f"No finite shortest-path upper bound found for pair ({vertex_i}, {vertex_j}) in {instance_file}.")
+
+		df_I.at[row_index, 5] = shortest_distance
+
+	#save_distances_from_df_structure(df_I, instance_file)
+	save_distances_from_df_structure(df_I, output_instance_file)

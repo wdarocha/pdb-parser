@@ -28,6 +28,7 @@ from .distance_constraints import (
 	talos_n_like,
 	backbone_angular_interval_to_distance_interval,
 	merge_distance_constraint_files,
+	tightening_upper_bounds,
 )
 
 from .files import (
@@ -60,5 +61,6 @@ __all__ = [
 	"save_coordinates_from_df_structure",
 	"save_distances_from_df_structure",
 	"save_cliques_from_matrix_T",
+	"tightening_upper_bounds",
 ]
 
