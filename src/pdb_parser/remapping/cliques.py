@@ -1,0 +1,80 @@
+"""Compatibility facade for legacy clique helpers."""
+
+from .clique_patterns import (
+    ATOM_ALIAS_MAP,
+    CLIQUE_PATTERN_MAP,
+    DDGP_ORDER_PATTERN_MAP,
+    build_available_atoms,
+    build_clique_pairs,
+    build_ddgp_pattern_entries,
+    get_atoms_of_residue,
+    get_clique_pattern_ids,
+    map_clique_type,
+    resolve_atom_name,
+)
+from .dataframes import remap_distance_dataframe, remap_structure_dataframe
+from .first_residue import build_first_residue_pattern
+from .layout import (
+    detect_remap_atom_layout,
+    ensure_backbone_plus_hydrogens_dataframe,
+    get_missing_backbone_atoms,
+    get_missing_backbone_plus_hydrogen_atoms,
+    validate_backbone_plus_hydrogens_residue,
+)
+from .ordering import (
+    choose_first_existing_atom,
+    first_residue_order,
+    get_backbone_residue_numeric_order,
+    get_first_residue_ha_atom,
+    get_ha_group,
+    get_internal_residue_numeric_order,
+    get_internal_residue_ordering_template,
+    get_nonterminal_h_group,
+    get_numeric_atom_order_from_named_order,
+    resolve_atom_name_choice,
+)
+from .torsions import (
+    build_atom_clique_index_matrix,
+    build_atom_lookup,
+    build_backbone_torsion_matrix,
+    build_interval_lookup,
+    get_interval_dl_du,
+    update_torsion_matrix,
+)
+
+__all__ = [
+    "ATOM_ALIAS_MAP",
+    "CLIQUE_PATTERN_MAP",
+    "DDGP_ORDER_PATTERN_MAP",
+    "build_atom_clique_index_matrix",
+    "build_atom_lookup",
+    "build_available_atoms",
+    "build_backbone_torsion_matrix",
+    "build_clique_pairs",
+    "build_ddgp_pattern_entries",
+    "build_first_residue_pattern",
+    "build_interval_lookup",
+    "choose_first_existing_atom",
+    "detect_remap_atom_layout",
+    "ensure_backbone_plus_hydrogens_dataframe",
+    "first_residue_order",
+    "get_backbone_residue_numeric_order",
+    "get_first_residue_ha_atom",
+    "get_ha_group",
+    "get_internal_residue_numeric_order",
+    "get_internal_residue_ordering_template",
+    "get_missing_backbone_atoms",
+    "get_missing_backbone_plus_hydrogen_atoms",
+    "get_numeric_atom_order_from_named_order",
+    "get_nonterminal_h_group",
+    "get_atoms_of_residue",
+    "get_clique_pattern_ids",
+    "get_interval_dl_du",
+    "map_clique_type",
+    "remap_distance_dataframe",
+    "remap_structure_dataframe",
+    "resolve_atom_name_choice",
+    "resolve_atom_name",
+    "update_torsion_matrix",
+    "validate_backbone_plus_hydrogens_residue",
+]

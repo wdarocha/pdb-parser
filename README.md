@@ -1,14 +1,12 @@
 # pdb-parser
 
 Lightweight Python toolkit for parsing **Protein Data Bank (PDB)**
-Nuclear Magnetic Resonance (NMR) structures and generating **distance and torsion-angle constraints**
+Nuclear Magnetic Resonance (NMR) and X-ray structures and generating **distance and torsion-angle constraints**
 tailored for **Distance Geometry Problem (DGP)** workflows.
 
 The package extracts structural information from PDB files and produces
 constraint sets that can be used in algorithms for protein structure
 determination.
-
-Current release: **v0.2.0** (2026-05-20).
 
 Typical applications include:
 
@@ -24,40 +22,57 @@ Typical applications include:
     │
     ├── data/                  # configuration and input lists
     │   ├── params.cfg
-    │   ├── instance_reorder.cfg
+    │   ├── instance_remap.cfg
     │   └── pdb_ids.txt
     │
     ├── src/pdb_parser/
     │   ├── pdb_parser.py      # CLI for parsing and writing output files
-    │   ├── instance_reorder.py # CLI for reordering previously written outputs
+    │   ├── instance_remap.py # CLI for remapping previously written outputs
     │   ├── geometry/          # distance geometry utilities
     │   ├── io/                # PDB parsing and filtering routines
     │   ├── pipeline/          # main parsing pipeline
-    │   ├── reordering/        # vertex ordering strategies
+    │   ├── remapping/         # remap order patterns and dataframe reindexing
     │   └── utils/             # auxiliary utilities
     │
     ├── pyproject.toml
     ├── README.md
-    ├── CITATION.cff
     └── .gitignore
 
 ------------------------------------------------------------------------
 
 ## Installation
 
-For development use from a local clone, install the package in editable mode:
+This project requires Python 3.10 or newer. Clone the repository:
+
+    git clone https://github.com/wdarocha/pdb-parser.git
+    cd pdb-parser
+
+Create and activate a virtual environment if desired, then install the package in editable mode:
 
     python -m pip install -e .
+
+This installs the runtime dependencies declared in `pyproject.toml`: `MDAnalysis`,
+`numpy`, `pandas`, `scipy`, and `requests`.
+
+Dependency compatibility is intentionally bounded by major version: NumPy
+1.23--2.x, pandas 1.5--2.x, SciPy 1.9--1.x, MDAnalysis 2.4--2.x, and requests
+2.28--2.x. The `pyproject.toml` file is the single packaging metadata source.
+The supported Python versions, rationale for each bound, and the minimum
+verification matrix are recorded in [`docs/dependencies.md`](docs/dependencies.md).
+
+To run the test suite and the lint step used by CI, install the development extras:
+
+    python -m pip install -e .[dev]
 
 This exposes the command-line entry points:
 
     pdb-parser --help
-    instance-reorder --help
+    instance-remap --help
 
 If you prefer not to install the package, run the modules directly from the source tree with `PYTHONPATH=src`:
 
     PYTHONPATH=src python -m pdb_parser.pdb_parser --help
-    PYTHONPATH=src python -m pdb_parser.instance_reorder --help
+    PYTHONPATH=src python -m pdb_parser.instance_remap --help
 
 ------------------------------------------------------------------------
 
@@ -66,8 +81,17 @@ If you prefer not to install the package, run the modules directly from the sour
 From the repository root, the following commands should display the available command-line options:
 
     PYTHONPATH=src python -m pdb_parser.pdb_parser --help
-    PYTHONPATH=src python -m pdb_parser.instance_reorder --help
+    PYTHONPATH=src python -m pdb_parser.instance_remap --help
     ./run_pipeline.sh --help
+
+The full local verification (lint, tests, and the 70% coverage gate used by CI) is:
+
+    make check
+
+or, step by step:
+
+    python -m ruff check .
+    python -m pytest -q
 
 ------------------------------------------------------------------------
 
@@ -75,575 +99,223 @@ From the repository root, the following commands should display the available co
 
 The parser stage is controlled by `data/params.cfg`.
 
-The instance reordering stage is controlled by `data/instance_reorder.cfg`.
+The instance remapping stage is controlled by `data/instance_remap.cfg`.
 
 Both files use the same `key: value` syntax and support `#` comments.
+
+Unknown keys are rejected by the current public configuration interface.
+Repeated keys are rejected as ambiguous. Numeric parameters must be finite;
+distance cutoffs, interval widths, and VDW radii must be strictly positive,
+even when the selected mode does not use them; `torsion_angle_width` must be
+zero or greater.
 
 Below is a complete description of the parameters currently supported by each stage.
 
 ------------------------------------------------------------------------
 
-### Running the parser stage
+## Public interface in this release
 
-After installing the package with `pip install -e .`, the parsing stage can be executed as
+The current public interface is intentionally narrower than the internal codebase.
 
-    pdb-parser data/pdb_ids.txt data/params.cfg data/pdb data/seeds data/outputs
+Publicly supported through configuration files:
 
-or, equivalently,
+- parser CLI: `pdb-parser`
+- remapping CLI: `instance-remap`
+- parser config file: `data/params.cfg`
+- remapping config file: `data/instance_remap.cfg`
+- experimental methods: `auto`, `nmr`, `xray`
+- output modes: `filtered_atoms`, `parser_outputs`
+- atom selections accepted by public parser config:
+  - `full_chain`
+  - `backbone`
+  - `backbone_plus_hydrogens`
+  - `backbone_plus_neighbors`
+- distance-constraint modes accepted by public parser config:
+  - `precise`
+  - `interval_centered`
+  - `interval_experimental`
+- remapping `order_id` values accepted by public config:
+  - `1..10`, alone or as a list of values and ranges (`1-10`, `1,3,9`)
+- remapping `order_type` values: `ddgp` (default), `redmdgp`, or both (`ddgp, redmdgp`);
+  one remap call writes every listed combination
 
-    python -m pdb_parser.pdb_parser data/pdb_ids.txt data/params.cfg data/pdb data/seeds data/outputs
+Internal code paths may contain additional options for future releases, but they are not part of the supported configuration surface of this release.
 
-The arguments are:
+### Input contract
 
-| argument | description |
-|----------|-------------|
-| `data/pdb_ids.txt` | text file containing the list of PDB identifiers to process |
-| `data/params.cfg` | configuration file controlling the parser behavior |
-| `data/pdb` | directory where PDB structures will be stored |
-| `data/seeds` | directory where per-PDB seed files will be read and written |
-| `data/outputs` | directory where the generated constraint files will be written |
+Each parser execution selects exactly one model and one chain. `full_chain` means
+all atoms from that selected chain; it never combines chains. Residues numbered
+`<= 0` are dropped with a warning; the remaining residue numbers may start at
+any positive value, but must be strictly consecutive. The `X_*`, `A_*`, and
+`I_*` formats do not encode insertion codes, so for each residue number the
+residue with a blank insertion code is kept (otherwise the alphabetically first
+code) and the other insertion-coded residues are discarded with a warning. For alternate locations, a blank conformer is preferred; when no
+blank conformer exists, the lexicographically first conformer is selected for
+each residue/atom identity. After these rules, consecutively numbered residues
+must also be bonded: a C(i)--N(i+1) distance above 2.0 Å is a chain break and the
+structure is rejected (for example, residues missing from the model, or
+insertion-coded residues whose removal leaves two unbonded residues).
 
-------------------------------------------------------------------------
-
-### Running the instance reordering stage
-
-The instance reordering stage consumes files already written by the parser and can be executed as
-
-    instance-reorder data/pdb_ids.txt data/instance_reorder.cfg data/outputs
-
-or, equivalently,
-
-    python -m pdb_parser.instance_reorder data/pdb_ids.txt data/instance_reorder.cfg data/outputs
-
-The arguments are:
-
-| argument | description |
-|----------|-------------|
-| `data/pdb_ids.txt` | text file containing the list of PDB identifiers to reorder |
-| `data/instance_reorder.cfg` | configuration file controlling the instance reordering behavior |
-| `data/outputs` | directory containing the files generated by the parser stage |
-
-The ordering choice is configured through `order_id` in `data/instance_reorder.cfg`, with supported values from `1` to `10`.
-
-Among these orderings, `order_id=1` corresponds to the preprint `A hybrid combinatorial-continuous strategy for solving molecular distance geometry problems` (arXiv:2510.19970), and `order_id=9` corresponds to the preprint `An Angle-Based Algorithmic Framework for the Interval Discretizable Distance Geometry Problem` (arXiv:2508.09143).
-
-The reordered files are written to `data/outputs/<pdb_id>/reordered/`.
-
-------------------------------------------------------------------------
-
-### Running pipeline stages with one script
-
-The repository also provides `run_pipeline.sh`, a wrapper for running the parser and instance reordering stages from the source tree without installing the package.
-
-Default usage runs the full pipeline:
-
-    ./run_pipeline.sh data/pdb_ids.txt data/params.cfg data/instance_reorder.cfg data/pdb data/seeds data/outputs
-
-The script always accepts the same six positional arguments:
-
-| argument | description |
-|----------|-------------|
-| `data/pdb_ids.txt` | text file containing the list of PDB identifiers |
-| `data/params.cfg` | configuration file for the parser stage |
-| `data/instance_reorder.cfg` | configuration file for the instance reordering stage |
-| `data/pdb` | directory where downloaded PDB structures will be stored |
-| `data/seeds` | directory where per-PDB seed files will be read and written |
-| `data/outputs` | directory where parser and reordered outputs are written |
-
-Execution modes are selected with `--mode`:
-
-    ./run_pipeline.sh --mode full data/pdb_ids.txt data/params.cfg data/instance_reorder.cfg data/pdb data/seeds data/outputs
-    ./run_pipeline.sh --mode parser data/pdb_ids.txt data/params.cfg data/instance_reorder.cfg data/pdb data/seeds data/outputs
-    ./run_pipeline.sh --mode reorder data/pdb_ids.txt data/params.cfg data/instance_reorder.cfg data/pdb data/seeds data/outputs
-    ./run_pipeline.sh --mode reorder-all data/pdb_ids.txt data/params.cfg data/instance_reorder.cfg data/pdb data/seeds data/outputs
-
-The `reorder-all` mode rewrites `order_id` in a temporary copy of `instance_reorder.cfg` and runs the reordering stage for `order_id=1..10` by default. A custom list can be provided with `--orders`, for example:
-
-    ./run_pipeline.sh --mode reorder-all --orders 1,3,9 data/pdb_ids.txt data/params.cfg data/instance_reorder.cfg data/pdb data/seeds data/outputs
-
-To save stage logs instead of printing command output directly, use `--log-dir`:
-
-    ./run_pipeline.sh --mode reorder-all --log-dir logs data/pdb_ids.txt data/params.cfg data/instance_reorder.cfg data/pdb data/seeds data/outputs
+Parser outputs require the standard amino-acid residue templates present in
+`RESIDUE_BONDS` (ALA, GLY, PRO, SER, THR, VAL, LEU, ILE, MET, CYS, ASN, GLN,
+ASP, GLU, HIS, PHE, TYR, TRP, LYS, and ARG). A residue outside this set is
+rejected rather than producing incomplete covalent topology.
 
 ------------------------------------------------------------------------
 
-### Output files
+## Experimental-method policy
 
-For each processed `pdb_id`, the parser stage writes files to
+`auto` reads `EXPDTA` and supports only NMR and X-ray diffraction. NMR keeps
+the existing H--H long-range policy (or N/C proxies in backbone mode). X-ray
+uses backbone angular distances for adjacent residues and CA--CA long-range
+distances for non-adjacent residues. An X-ray request for
+`interval_experimental` is converted to `interval_centered` with a warning.
 
-    data/outputs/<pdb_id>/
+For X-ray coordinates, `backbone_plus_hydrogens` is converted to
+`backbone_plus_neighbors`, because hydrogens are normally absent.
 
-Main parser outputs:
-
-- `X_<pdb_id>_model<model_number>_chain<chain_id>.dat`
-  Structure file with one atom per line.
-  Columns: `atom_id atom_name resid resname x y z`
-  Format: `%5d %-4s %4d %3s %8.3f%8.3f%8.3f`
-
-- `A_<pdb_id>_model<model_number>_chain<chain_id>.dat`
-  Angular constraint file with one residue per line.
-  Columns: `resid resname omega_center omega_radius phi_center phi_radius psi_center psi_radius`
-  Format: `%4d %3s %9.4f %9.4f %9.4f %9.4f %9.4f %9.4f`
-
-- `I_<pdb_id>_model<model_number>_chain<chain_id>.dat`
-  Distance-constraint file.
-  Columns: `atom_id_i atom_id_j resid_i resid_j d_l d_u atom_name_i atom_name_j resname_i resname_j`
-  Format: `%5d %5d %6d %6d %20.16f %20.16f %4s %4s %s %s`
-
-Per-PDB seed files are stored in
-
-    data/seeds/<pdb_id>/
-
-using the filename
-
-    seed_<pdb_id>.dat
-
-If at least one random stream is needed for the current execution, the
-parser reuses the stored seeds when the file already exists, or creates
-the directory tree and writes the file before generating the random
-outputs.
-
-If the current execution is fully deterministic, no seed file is needed.
-In that case, the parser does not create `seed_<pdb_id>.dat`.
-
-The file stores only the seed fields that can actually affect the
-current execution. If a later run changes the stochastic components for
-the same `pdb_id`, the parser updates the file accordingly.
-
-The supported seed fields are:
-
-- `seed_interval_centered_distances` only when `distance_constraints = interval_centered`
-- `seed_talos_angle_centers` only when the effective torsion interval width is greater than `0`
-- `seed_phi_psi_mask` only when the `phi/psi` selection is genuinely random; for example, it is not stored when `percentage_backbone_torsion_angles = 100`
-
-The instance reordering stage writes files to
-
-    data/outputs/<pdb_id>/reordered/
-
-Main reordered outputs:
-
-- `X_<pdb_id>_model<model_number>_chain<chain_id>_ddgpHCorder<order_id>.dat`
-  Coordinate-only file, one line per atom in reordered order.
-  Columns: `x y z`
-  Format: `%.3f %.3f %.3f`
-
-- `I_<pdb_id>_model<model_number>_chain<chain_id>_ddgpHCorder<order_id>.dat`
-  Reordered distance-constraint file.
-  Columns: `atom_id_i atom_id_j resid_i resid_j d_l d_u atom_name_i atom_name_j resname_i resname_j`
-  Format: `%5d %5d %6d %6d %20.16f %20.16f %4s %4s %s %s`
-
-- `T_<pdb_id>_model<model_number>_chain<chain_id>_ddgpHCorder<order_id>.dat`
-  Clique matrix used by the reordered instance.
-  Columns: `atom_id_i3 atom_id_i2 atom_id_i1 atom_id_i sign_tau abs_tau delta_tau`
-  Format: `%d %d %d %d %d %.6f %.6f`
-
-Important: the reordered `X_*` file is intentionally different from the parser-stage `X_*` file. The parser-stage file stores atom identifiers and residue metadata together with coordinates, while the reordered file stores only the `x y z` coordinates in reordered atom order.
+The `noe_strong`, `noe_medium`, `noe_weak`, `vdwr_hh`, and
+`percentage_hh_distance_constraints` parameters are NMR-only. For X-ray, `interval_centered` uses `epsilon_long` and
+`max_distance`; its CA--CA lower bound is internal (`2 × vdw_c`).
 
 ------------------------------------------------------------------------
 
-### PDB list
+## Compatibility policy
 
-The file
+The following behaviors are treated as compatibility-sensitive and change only in a documented release:
 
-    data/pdb_ids.txt
+- the scientific logic used to build the generated instances
+- the accepted public values already documented for this release
+- the naming pattern of parser outputs `X_*`, `A_*`, `I_*`
+- the naming pattern of remapped outputs `X_*`, `I_*`, `T_*`
+- the current text-file structure of generated instance files
+- the current directory layout under `data/outputs/<pdb_id>/`
+- the meaning of `order_id` values `1..10`
 
-contains a list of PDB identifiers, one per line.
-
-Example
-
-    1TOS
-    1UAO
-
-Each identifier corresponds to a structure that will be retrieved and
-processed by the pipeline.
+See [`CHANGELOG.md`](CHANGELOG.md) for changes between releases.
 
 ------------------------------------------------------------------------
 
-### Parser configuration parameters (`params.cfg`)
+## Future and experimental surface
 
-#### Model selection
+The repository may contain implementation hooks that support future releases, experiments, or internal workflows. Those code paths should be interpreted with the following rule:
 
-Selects which model from the NMR PDB structure will be used.
+- implemented does not automatically mean publicly supported
+- undocumented input values are not part of the current release contract
+- internal options may change between releases until they are explicitly documented in this `README`
 
-------------------------------------------------------------------------
-
-#### Chain selection
-
-Specifies which chain in the selected model will be processed. Only atoms belonging to this chain are considered.
+For practical use, treat this document and the public config validation rules as the release contract. Everything else should be considered internal or provisional until promoted here.
 
 ------------------------------------------------------------------------
 
-#### Atom selection strategy
+## Architecture overview
 
-Defines which atoms are extracted from the PDB structure to build the
-protein graph used by the parser and by the reordering stage.
+The project is organized as a small pipeline with two public stages.
 
-For the current public interface, the active option is:
+1. Parser stage
+   - downloads or reads one PDB structure
+   - validates the selected experimental method, model and chain
+   - filters the public atom set
+   - generates `X_*`, `A_*`, and `I_*`
 
-| option | description |
-|-------|-------------|
-| `backbone_plus_hydrogens` | backbone atoms `N`, `CA`, `C` plus the directly attached hydrogens needed by the article-oriented iDDGP construction |
+2. Remapping stage
+   - reads parser outputs for one structure
+   - applies one or more fixed `order_id` patterns
+   - writes remapped `X_*`, `I_*`, and `T_*`
 
-This is also the atom-selection layout assumed by the current instance
-reordering stage.
+Main module responsibilities:
 
-------------------------------------------------------------------------
-
-#### Protein-chain model used for instance generation
-
-The current workflow follows the protein-chain model described in the
-manuscript section *Generating iDDGP Instances from Protein Structures*.
-For residue `i`, the backbone is represented by the triplet
-`{N_i, Cα_i, C_i}` and the backbone torsions are
-
-- `phi_i := C_{i-1} - N_i - Cα_i - C_i`
-- `psi_i := N_i - Cα_i - C_i - N_{i+1}`
-- `omega_i := Cα_{i-1} - C_{i-1} - N_i - Cα_i`
-
-Only the backbone is modeled explicitly. Side-chain atoms are not part of
-the generated instances. To improve triangulation, the parser keeps the
-hydrogens attached to `N` and `CA`, with residue-specific handling:
-
-- standard residues use one backbone amide hydrogen among `H`, `H1`, `H2`, or `H3`, plus `HA`
-- glycine uses `HA2` when available, otherwise `HA3`
-- proline has no backbone amide hydrogen, so one of `HD2` or `HD3` is used as the `HN` surrogate, together with `HA`
-
-The reorder stage resolves these concrete atom names to the logical labels
-used by the construction:
-
-- `HN -> H1`, `H`, `HD2`, or `HD3`
-- `HA -> HA`, `HA2`, or `HA3`
+- `src/pdb_parser/pdb_parser.py`
+  - public CLI for the parser stage
+- `src/pdb_parser/instance_remap.py`
+  - public CLI for the remapping stage
+- `src/pdb_parser/pipeline/`
+  - stage orchestration and public pipeline flow
+- `src/pdb_parser/io/`
+  - file conversion, filtering, PDB access, and constraint writers
+- `src/pdb_parser/remapping/`
+  - order patterns, clique construction, and dataframe reindexing
+- `src/pdb_parser/geometry/`
+  - geometric helper functions used by the pipeline
+- `src/pdb_parser/utils/`
+  - config readers, filesystem helpers, and seed management
 
 ------------------------------------------------------------------------
 
-#### Constraint families used to build one instance
+## Operational Guides
 
-For each processed chain, the final distance-constraint file `I_*` is
-obtained by merging several families of restraints:
+The detailed operational material now lives in dedicated short guides inside `docs/`:
 
-- exact covalent and local geometric distances induced by the filtered backbone topology
-- exact peptide-plane distances between consecutive residues under the planar peptide-group assumption
-- optional van der Waals lower bounds
-- NMR-like inter-hydrogen distance intervals generated from the reference PDB coordinates
-- distance intervals induced by sampled backbone torsion intervals
+- parser stage: [`docs/parser_stage.md`](docs/parser_stage.md)
+- remap stage: [`docs/remap_stage.md`](docs/remap_stage.md)
+- pipeline wrapper: [`docs/pipeline_wrapper.md`](docs/pipeline_wrapper.md)
 
-This matches the article-oriented workflow: backbone geometry is treated as
-the structural scaffold, while uncertain NMR information is represented as
-interval data.
+Use those guides for command examples, positional arguments, output layout, and seed behavior.
 
-------------------------------------------------------------------------
+At a high level:
 
-### Distance constraint model
+- `pdb-parser` reads `data/pdb_ids.txt` and `data/params.cfg`, downloads or reuses PDB files, and writes either a filtered-coordinate file (`output_mode: filtered_atoms`) or parser-stage `X_*`, `A_*`, and `I_*` files (`output_mode: parser_outputs`) under `data/outputs/<pdb_id>/`.
+- `instance-remap` reads parser-stage outputs plus `data/instance_remap.cfg`, applies one or more fixed `order_id` values (as DDGP orders or, with `order_type: redmdgp`, as iDMDGP re-orders) for `backbone_plus_hydrogens`, and writes remapped `X_*`, `I_*`, and `T_*` files under `data/outputs/<pdb_id>/remapped/`.
+- `run_pipeline.sh` orchestrates parser-only, remap-only, full, and `remap-all` executions from the source tree.
 
-Defines how **NMR-derived distance constraints** are generated.
+The command-line tools keep processing the remaining PDB identifiers after a
+per-structure failure, but return exit status `1` when one or more identifiers
+fail. Configuration errors return status `2` before processing begins.
 
-Currently supported options:
+The remap stage supports parser outputs generated with:
 
-| option | description |
-|------|-------------|
-| `precise` | generates exact NMR distances `[d_{ij}, d_{ij}]` for atom pairs within the cutoff |
-| `interval_centered` | generates synthetic intervals around the reference PDB distance |
-| `interval_experimental` | generates NOESY-like intervals using strong, medium, and weak experimental classes |
+- `atom_selection: backbone`
+- `atom_selection: backbone_plus_hydrogens`
 
-Note that **covalent distances, planar constraints, and peptide-group
-distances are always treated as precise**.
+`backbone_plus_neighbors` is a public parser selection and is also the X-ray
+effective selection when `backbone_plus_hydrogens` is requested. It is not a
+remapping input. `full_chain` and `filtered_atoms` likewise cannot be remapped.
 
-------------------------------------------------------------------------
+Remapping is supported for `backbone` with NMR or X-ray outputs and for
+`backbone_plus_hydrogens` with NMR outputs only. The X-ray fallback is
+therefore parser-only.
 
-#### Precise distance constraints
+For `backbone`, the remapped `T_*` uses the simplified chain rule based on the
+three previous vertices and parser angles from `A_*`. In this layout,
+`instance_remap.cfg` still selects `model_number` and `chain_id`, but
+`order_id` is ignored and the remapped outputs always use the suffix
+`*_dmdgp_order.dat`. For
+`backbone_plus_hydrogens`, the existing DDGP/iDDGP clique construction remains
+in place.
 
-When using `precise`, the parser keeps each accepted NMR-derived distance as
-an exact value,
+The generated files are compatibility-sensitive contracts:
 
-$$
-\mathcal{D}_{ij} = [d_{ij}, d_{ij}]
-$$
-
-where `d_ij` is the reference distance measured in the PDB structure.
-Pairs with `d_ij >= max_distance` are ignored.
-
-In this mode, the parser also forces the backbone angular intervals to be
-exact:
-
-- `torsion_angle_width = 0`
-- `percentage_backbone_torsion_angles = 100`
-
-So the generated `A_*` file contains zero-width angular intervals instead
-of sampled angular ranges.
-
-Parameter used by this mode:
-
-| parameter | meaning |
-|-----------|---------|
-| `max_distance` | maximum allowed distance for keeping an exact NMR-derived pair |
+- parser-stage `X_*` keeps atom ids, atom names, residue ids, residue names, and coordinates together;
+- parser-stage `A_*` keeps one row per residue with `omega/phi/psi` centers and radii;
+- parser-stage `I_*` keeps merged distance constraints with atom and residue metadata;
+- remapped `X_*` remains coordinate-only in remapped atom order;
+- remapped `I_*` remains the same logical constraint set, reindexed to the remapped order;
+- remapped `T_*` remains the seven-column clique matrix consumed by the downstream DDGP workflow.
 
 ------------------------------------------------------------------------
 
-#### Synthetic distance intervals
+## Reference And Theory
 
-When using `interval_centered` distance intervals are generated around the reference distance extracted
-from the PDB.
+The public operational surface is intentionally summarized here.
 
-The reference distance, $d_{ij}$, is perturbed as
+Short theoretical summary:
 
-$$
-d_{ij}^* \sim \mathcal{N}\left(d_{ij},\left(\frac{\varepsilon_{ij}}{8}\right)^2\right)
-$$
+- the parser builds backbone-focused `X_*`, `A_*`, and `I_*` files from one NMR or X-ray model/chain;
+- the remapping stage converts those files into DDGP/iDDGP-oriented `X_*`, `I_*`, and `T_*` outputs;
+- the current public parser atom selections are `full_chain`, `backbone`,
+  `backbone_plus_hydrogens`, and `backbone_plus_neighbors`;
+- the current public remapping choices are the fixed `order_id=1..10`, with `order_type: ddgp` (default) or `redmdgp`.
 
-and the resulting interval is
+Detailed reference material was moved to:
 
-$$
-\mathcal{D}_{ij} =
-\left[
-\max\left(d_{ij}^* - \frac{\varepsilon_{ij}}{2},\ \mathrm{vdwr\_hh}\right),
-\
-\min\left(d_{ij}^* + \frac{\varepsilon_{ij}}{2},\ d_{\mathrm{max}}\right)
-\right]
-$$
+- [docs/remap_reference.md](docs/remap_reference.md)
 
-where the interval width satisfies $\varepsilon_{ij} = 8\sigma$, corresponding to $\pm4\sigma$ around the mean, and `vdwr_hh` is the lower-bound parameter from `params.cfg`.
+That document keeps:
 
-------------------------------------------------------------------------
-
-#### Distance parameters
-
-The distance-generation parameters depend on the selected mode.
-
-| parameter | meaning |
-|-----------|---------|
-| `epsilon_short` | interval width for atoms in the same or adjacent residues |
-| `epsilon_long` | interval width for atoms in non-adjacent residues |
-| `vdwr_hh` | lower-bound floor used for hydrogen-hydrogen distance intervals in both interval modes |
-| `max_distance` | cutoff used by `precise` and maximum allowed upper bound used by `interval_centered` |
-
-------------------------------------------------------------------------
-
-#### Experimental distance intervals
-
-When using `interval_experimental`, the parser generates NOESY-like
-intervals from the reference PDB distances using three intensity classes:
-
-- strong: `[vdwr_hh, noe_strong]`
-- medium: `[vdwr_hh, noe_medium]`
-- weak: `[vdwr_hh, noe_weak]`
-
-Pairs whose reference distance is larger than `noe_weak` are ignored.
-
-Parameters used by this mode:
-
-| parameter | meaning |
-|-----------|---------|
-| `noe_strong` | upper bound for strong NOE peaks |
-| `noe_medium` | upper bound for medium NOE peaks |
-| `noe_weak` | upper bound for weak NOE peaks |
-| `vdwr_hh` | shared lower-bound floor, already configurable in `data/params.cfg` |
-
-This experimental option is already available in the parser through
-`distance_constraints: interval_experimental`.
-
-------------------------------------------------------------------------
-
-### van der Waals constraints
-
-Optional lower-bound distance constraints based on the van der Waals
-radii of protein atoms can be included.
-
-Options:
-
-| value | meaning |
-|------|---------|
-| `yes` | include van der Waals lower-bound constraints |
-| `no`  | ignore van der Waals constraints |
-
-------------------------------------------------------------------------
-
-### Torsion-angle intervals
-
-Torsion angles are derived from the PDB structure and converted into
-intervals.
-
-Given a reference torsion angle $\tau_{i}$, taken from the PDB structure, a perturbed value is
-sampled as
-
-$$
-\tau_i^* \sim \mathcal{N}\left(\tau_i,\left(\frac{\Delta\tau_i}{8}\right)^2\right)
-$$
-
-and the resulting interval is
-
-$$
-\left[
-\tau_i^* - \frac{\Delta\tau_i}{2},
-\
-\tau_i^* + \frac{\Delta\tau_i}{2}
-\right],
-$$
-
-where `torsion_angle_width` defines the total interval width. This corresponds to $\Delta\tau = 8\sigma$
-
-The parser writes these sampled `omega/phi/psi` intervals to `A_*`. It then
-converts them to additional distance intervals and merges them into the
-final `I_*` file.
-
-------------------------------------------------------------------------
-
-### Backbone torsion selection
-
-The percentage of backbone torsion angles ($\phi/\psi$) that will be included as
-interval constraints is controlled by `percentage_backbone_torsion_angles`
-
-| value | behavior |
-|------|----------|
-| `100` | all backbone torsion angles are used |
-| `<100` | a random subset of torsion angles is used |
-
-Angles that are **not selected** receive the default 
-range $(-180^{o},\ 180^{o}]$
-
-When `distance_constraints: precise` is used, the parser overrides this
-parameter internally and always uses `100`.
-
-------------------------------------------------------------------------
-
-### Parser configuration parameters example
-
-```
-model_number: 1
-chain_id: A
-atom_selection: backbone_plus_hydrogens
-distance_constraints: interval_centered
-epsilon_short: 1.0
-epsilon_long: 2.0
-max_distance: 5.0
-vdwr_hh: 1.8
-vdw_constraints: yes
-torsion_angle_width: 50.0
-percentage_backbone_torsion_angles: 100.0
-```
-
-Experimental distance-constraint example:
-
-```
-model_number: 1
-chain_id: A
-atom_selection: backbone_plus_hydrogens
-distance_constraints: interval_experimental
-noe_strong: 2.5
-noe_medium: 3.5
-noe_weak: 5.0
-vdwr_hh: 1.8
-vdw_constraints: yes
-torsion_angle_width: 50.0
-percentage_backbone_torsion_angles: 100.0
-```
-
-Precise distance-constraint example:
-
-```
-model_number: 1
-chain_id: A
-atom_selection: backbone_plus_hydrogens
-distance_constraints: precise
-max_distance: 5.0
-vdwr_hh: 1.8
-vdw_constraints: yes
-torsion_angle_width: 0.0
-percentage_backbone_torsion_angles: 100.0
-```
-
-------------------------------------------------------------------------
-
-### Instance reordering configuration (`instance_reorder.cfg`)
-
-The instance reordering stage uses its own configuration file.
-
-Currently supported parameters:
-
-| parameter | meaning |
-|-----------|---------|
-| `model_number` | model number used when the parser-stage files were generated |
-| `chain_id` | chain identifier used when the parser-stage files were generated |
-| `order_id` | ordering choice; supported values are integers from `1` to `10` |
-
-For `order_id`, any value from `1` to `10` generates a constant DDGP ordering vector filled with that identifier for all internal residues. Among these choices, `order_id=1` is the ordering used in `A hybrid combinatorial-continuous strategy for solving molecular distance geometry problems` (arXiv:2510.19970), while `order_id=9` is the ordering used in `An Angle-Based Algorithmic Framework for the Interval Discretizable Distance Geometry Problem` (arXiv:2508.09143).
-
-### How the reordering stage builds the DDGP/iDDGP instance
-
-The parser-stage `X_*` file preserves the filtered atom list in PDB order.
-The reordering stage is what turns that output into a DDGP-compatible
-instance.
-
-Important: this stage currently assumes that the parser was run with
-`atom_selection: backbone_plus_hydrogens`.
-
-For the first residue, the code chooses one initialization pattern
-according to the hydrogen names available in that residue, covering the
-expected N-terminus variants (`H3`, `H2`, `H1`, `H`) and the proline/glycine
-special cases discussed above.
-
-For the remaining residues, atoms are appended residue by residue using a
-fixed five-atom internal pattern controlled by `order_id`.
-
-The internal-residue patterns available in the current public interface are:
-
-- `order_id=1`: `N, CA, C, HN, HA`
-- `order_id=2`: `N, CA, C, HA, HN`
-- `order_id=3`: `N, CA, HN, HA, C`
-- `order_id=4`: `N, CA, HN, C, HA`
-- `order_id=5`: `N, HN, CA, HA, C`
-- `order_id=6`: `N, HN, CA, C, HA`
-- `order_id=7`: `HN, N, CA, HA, C`
-- `order_id=8`: `HN, N, CA, C, HA`
-- `order_id=9`: `HN, CA, N, HA, C`
-- `order_id=10`: `HN, CA, N, C, HA`
-
-In all cases, the concrete aliases `HN -> H/H1/HD2/HD3` and
-`HA -> HA/HA2/HA3` are resolved from the actual residue contents. In
-practice, the first residue may contain N-terminus variants such as `H3`,
-`H2`, and `H1`, while non-terminal non-proline residues are expected to
-provide `H` for the amide-hydrogen position.
-
-Besides the reordered `X_*` and `I_*` files, this stage also writes the
-clique matrix `T_*`, which is the discrete structure used by the reordered
-instance. The selected `order_id` is appended to each reordered filename
-as `_ddgpHCorder<order_id>.dat`.
-
-### Instance reordering configuration example
-
-```
-model_number: 1
-chain_id: A
-order_id: 9
-```
-
-------------------------------------------------------------------------
-
-## ⚙️ Installation
-
-Clone the repository:
-
-    git clone https://github.com/wdarocha/pdb-parser.git
-    cd pdb-parser
-
-This project requires Python 3.10 or newer.
-
-Create and activate a virtual environment if desired, then install the package in editable mode:
-
-    pip install -e .
-
-The package depends on the following Python libraries:
-
-- `MDAnalysis`
-- `numpy`
-- `pandas`
-- `scipy`
-- `requests`
-
-With the current `pyproject.toml`, these dependencies are installed automatically when running `pip install -e .`.
-
-If you prefer to install them manually first, you can use:
-
-    pip install MDAnalysis numpy pandas scipy requests
+- parser parameter reference and examples;
+- distance/torsion modeling notes;
+- remapping configuration details;
+- internal-residue order tables used by the public interface.
 
 ------------------------------------------------------------------------
 
@@ -651,7 +323,8 @@ If you prefer to install them manually first, you can use:
 
 If this code is useful in your research, please cite the repository (also available via the **“Cite this repository”** button on GitHub thanks to the included `CITATION.cff`) and cite the preprint associated with the ordering used in your experiments.
 
-The reordering code supports `order_id` values from `1` to `10`. At the moment, the preprint references documented in this repository are:
+The remapping code supports fixed `order_id` values from `1` to `10`. At the
+moment, the preprint references documented in this repository are:
 
 - `order_id=1`: `A hybrid combinatorial-continuous strategy for solving molecular distance geometry problems` (arXiv:2510.19970).
 - `order_id=9`: `An Angle-Based Algorithmic Framework for the Interval Discretizable Distance Geometry Problem` (arXiv:2508.09143).
@@ -680,7 +353,7 @@ https://arxiv.org/abs/2510.19970
 
 ### Preprint for `order_id=9`
 
-**Wagner A. A. da Rocha, Carlile Lavor, Leo Liberti, Leticia de Melo Costa, Leonardo D. Secchin, Therese E. Malliavin.**  
+**Wagner da Rocha, Carlile Lavor, Leo Liberti, Leticia de Melo Costa, Leonardo D. Secchin, Therese E. Malliavin.**
 *An Angle-Based Algorithmic Framework for the Interval Discretizable Distance Geometry Problem.*  
 **arXiv:2508.09143**, 2025.  
 https://arxiv.org/abs/2508.09143
@@ -689,7 +362,7 @@ https://arxiv.org/abs/2508.09143
 ```bibtex
 @misc{darocha2025anglebased,
   title        = {An Angle-Based Algorithmic Framework for the Interval Discretizable Distance Geometry Problem},
-  author       = {Wagner A. A. da Rocha and Carlile Lavor and Leo Liberti and Leticia de Melo Costa and Leonardo D. Secchin and Therese E. Malliavin},
+  author       = {Wagner da Rocha and Carlile Lavor and Leo Liberti and Leticia de Melo Costa and Leonardo D. Secchin and Therese E. Malliavin},
   year         = {2025},
   eprint       = {2508.09143},
   archivePrefix= {arXiv},
@@ -703,16 +376,16 @@ https://arxiv.org/abs/2508.09143
 ## 📜 License
 
 This repository is licensed under the [MIT License](./LICENSE).
-© 2025 Wagner Alan Aparecido da Rocha
+© 2025–2026 Wagner da Rocha
 
 ------------------------------------------------------------------------
 
 ## 👤 Author
 
-Developed and maintained by [Wagner Alan Aparecido da Rocha](https://github.com/wdarocha).
+Developed and maintained by [Wagner da Rocha](https://github.com/wdarocha).
 
 ------------------------------------------------------------------------
 
 ## 🙏 Acknowledgments
 
-Special thanks to [Leonardo D.Secchin](https://github.com/leonardosecchin) for the valuable support provided during the development of the code.
+Special thanks to [Leonardo D. Secchin](https://github.com/leonardosecchin) for the valuable support provided during the development of the code.

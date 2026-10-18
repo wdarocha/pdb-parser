@@ -4,33 +4,35 @@ set -euo pipefail
 usage() {
 	cat >&2 <<'USAGE'
 Usage:
-  ./run_pipeline.sh [options] <pdb_ids.dat> <parser_params.cfg> <instance_reorder.cfg> <pdb_data_dir> <seed_dir> <out_dir>
+  ./run_pipeline.sh [options] <pdb_ids.dat> <parser_params.cfg> <instance_remap.cfg> <pdb_data_dir> <seed_dir> <out_dir>
 
 Options:
-  --mode <mode>       Execution mode: full, parser, reorder, or reorder-all (default: full)
-  --orders <list>     Order ids for reorder-all, e.g. 1-10 or 1,3,9 (default: 1-10)
+  --mode <mode>       Execution mode: full, parser, remap, or remap-all (default: full)
+  --orders <list>     Order ids for remap-all, e.g. 1-10 or 1,3,9 (default: 1-10)
   --log-dir <dir>     Write one log file per stage to this directory
+  --keep-tmp          Keep the parser intermediate files in <out_dir>/<pdb_id>/tmp/
   -h, --help          Show this help message
 
 Arguments:
-  pdb_ids.dat            File with one PDB id per line
-  parser_params.cfg      Parameter file for the parser stage
-  instance_reorder.cfg   Base parameter file for the instance reordering stage
-  pdb_data_dir           Directory where downloaded PDB files are stored
-  seed_dir               Directory where per-PDB seed files are stored
-  out_dir                Directory where parser and reordered outputs are written
+  pdb_ids.dat           File with one PDB id per line
+  parser_params.cfg     Parameter file for the parser stage
+  instance_remap.cfg    Base parameter file for the instance remapping stage
+  pdb_data_dir          Directory where downloaded PDB files are stored
+  seed_dir              Directory where per-PDB seed files are stored
+  out_dir               Directory where parser and remapped outputs are written
 
 Modes:
-  full         Run parser and then instance reordering with the configured order_id
+  full         Run parser and then instance remapping with the configured order_id
   parser       Run only the parser stage
-  reorder      Run only instance reordering with the configured order_id
-  reorder-all  Run only instance reordering for all order ids selected by --orders
+  remap        Run only instance remapping with the configured order_id
+  remap-all    Run only instance remapping for all order ids selected by --orders
 USAGE
 }
 
 MODE="full"
 ORDERS="1-10"
 LOG_DIR=""
+KEEP_TMP_FLAG=""
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
@@ -41,6 +43,10 @@ while [ "$#" -gt 0 ]; do
 		--orders)
 			ORDERS="${2:?missing value for --orders}"
 			shift 2
+			;;
+		--keep-tmp)
+			KEEP_TMP_FLAG="--keep-tmp"
+			shift
 			;;
 		--log-dir)
 			LOG_DIR="${2:?missing value for --log-dir}"
@@ -55,9 +61,7 @@ while [ "$#" -gt 0 ]; do
 			break
 			;;
 		-*)
-			printf 'Unknown option: %s
-
-' "$1" >&2
+			printf 'Unknown option: %s\n\n' "$1" >&2
 			usage
 			exit 2
 			;;
@@ -68,11 +72,9 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$MODE" in
-	full|parser|reorder|reorder-all) ;;
+	full|parser|remap|remap-all) ;;
 	*)
-		printf 'Invalid mode: %s
-
-' "$MODE" >&2
+		printf 'Invalid mode: %s\n\n' "$MODE" >&2
 		usage
 		exit 2
 		;;
@@ -88,11 +90,32 @@ REPO_ROOT="$SCRIPT_DIR"
 
 PDB_IDS_FILE="$1"
 PARSER_PARAMS_FILE="$2"
-REORDER_PARAMS_FILE="$3"
+REMAP_PARAMS_FILE="$3"
 PDB_DATA_DIR="$4"
 SEED_DIR="$5"
 OUT_DIR="$6"
 PYTHON_BIN="${PYTHON:-python3}"
+
+get_parser_output_mode() {
+	awk '
+		/^[[:space:]]*#/ { next }
+		/^[[:space:]]*output_mode[[:space:]]*:/ {
+			value = $0
+			sub(/^[^:]*:[[:space:]]*/, "", value)
+			sub(/[[:space:]]*#.*/, "", value)
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+			print tolower(value)
+			exit
+		}
+	' "$PARSER_PARAMS_FILE"
+}
+
+PARSER_OUTPUT_MODE="$(get_parser_output_mode)"
+PARSER_OUTPUT_MODE="${PARSER_OUTPUT_MODE:-parser_outputs}"
+if [ "$MODE" != "parser" ] && [ "$PARSER_OUTPUT_MODE" != "parser_outputs" ]; then
+	printf '%s\n' "Mode '$MODE' requires parser output_mode: parser_outputs; got '$PARSER_OUTPUT_MODE'. Use --mode parser to write only the filtered atoms." >&2
+	exit 2
+fi
 
 export PYTHONPATH="$REPO_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 
@@ -112,24 +135,34 @@ run_with_optional_log() {
 }
 
 print_header() {
-	printf '======================================================
-'
-	printf '%s
-' "$1"
-	printf '======================================================
-'
+	printf '======================================================\n'
+	printf '%s\n' "$1"
+	printf '======================================================\n'
 }
 
 run_parser() {
 	print_header 'Stage 1/2: parser'
-	run_with_optional_log parser.log 		"$PYTHON_BIN" -m pdb_parser.pdb_parser 		"$PDB_IDS_FILE" 		"$PARSER_PARAMS_FILE" 		"$PDB_DATA_DIR" 		"$SEED_DIR" 		"$OUT_DIR"
+	run_with_optional_log \
+		parser.log \
+		"$PYTHON_BIN" -m pdb_parser.pdb_parser \
+		"$PDB_IDS_FILE" \
+		"$PARSER_PARAMS_FILE" \
+		"$PDB_DATA_DIR" \
+		"$SEED_DIR" \
+		"$OUT_DIR" \
+		${KEEP_TMP_FLAG:+"$KEEP_TMP_FLAG"}
 }
 
-run_reorder() {
+run_remap() {
 	local params_file="$1"
 	local log_name="$2"
 
-	run_with_optional_log "$log_name" 		"$PYTHON_BIN" -m pdb_parser.instance_reorder 		"$PDB_IDS_FILE" 		"$params_file" 		"$OUT_DIR"
+	run_with_optional_log \
+		"$log_name" \
+		"$PYTHON_BIN" -m pdb_parser.instance_remap \
+		"$PDB_IDS_FILE" \
+		"$params_file" \
+		"$OUT_DIR"
 }
 
 expand_orders() {
@@ -141,26 +174,22 @@ expand_orders() {
 			start="${item%-*}"
 			end="${item#*-}"
 			if [ "$start" -gt "$end" ]; then
-				printf 'Invalid order range: %s
-' "$item" >&2
+				printf 'Invalid order range: %s\n' "$item" >&2
 				exit 2
 			fi
 			for ((order=start; order<=end; order++)); do
-				printf '%s
-' "$order"
+				printf '%s\n' "$order"
 			done
 		elif [[ "$item" =~ ^[0-9]+$ ]]; then
-			printf '%s
-' "$item"
+			printf '%s\n' "$item"
 		else
-			printf 'Invalid order specification: %s
-' "$item" >&2
+			printf 'Invalid order specification: %s\n' "$item" >&2
 			exit 2
 		fi
 	done
 }
 
-write_reorder_params_for_order() {
+write_order_params_for_order() {
 	local order_id="$1"
 	local source_file="$2"
 	local target_file="$3"
@@ -184,30 +213,24 @@ write_reorder_params_for_order() {
 case "$MODE" in
 	full)
 		run_parser
-		print_header 'Stage 2/2: instance reordering'
-		run_reorder "$REORDER_PARAMS_FILE" reorder.log
+		print_header 'Stage 2/2: instance remapping'
+		run_remap "$REMAP_PARAMS_FILE" remap.log
 		;;
 	parser)
 		run_parser
 		;;
-	reorder)
-		print_header 'Stage 2/2: instance reordering'
-		run_reorder "$REORDER_PARAMS_FILE" reorder.log
+	remap)
+		print_header 'Stage 2/2: instance remapping'
+		run_remap "$REMAP_PARAMS_FILE" remap.log
 		;;
-	reorder-all)
+	remap-all)
 		TMP_DIR="$(mktemp -d)"
 		trap 'rm -rf "$TMP_DIR"' EXIT
-		print_header "Stage 2/2: instance reordering for order_id=${ORDERS}"
-		expand_orders "$ORDERS" | while read -r ORDER_ID; do
-			TMP_REORDER_PARAMS="$TMP_DIR/instance_reorder_order${ORDER_ID}.cfg"
-			write_reorder_params_for_order "$ORDER_ID" "$REORDER_PARAMS_FILE" "$TMP_REORDER_PARAMS"
-			printf '%s
-' '------------------------------------------------------'
-			printf 'Running order_id=%s
-' "$ORDER_ID"
-			printf '%s
-' '------------------------------------------------------'
-			run_reorder "$TMP_REORDER_PARAMS" "reorder_order${ORDER_ID}.log"
-		done
+		# One remap call writes every order: the parser files are read and validated once.
+		ORDER_LIST="$(expand_orders "$ORDERS" | paste -sd, -)"
+		print_header "Stage 2/2: instance remapping for order_id=${ORDER_LIST}"
+		TMP_REMAP_PARAMS="$TMP_DIR/instance_remap_orders.cfg"
+		write_order_params_for_order "$ORDER_LIST" "$REMAP_PARAMS_FILE" "$TMP_REMAP_PARAMS"
+		run_remap "$TMP_REMAP_PARAMS" "remap_all.log"
 		;;
 esac

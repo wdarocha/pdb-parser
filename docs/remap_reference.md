@@ -1,0 +1,321 @@
+# DDGP / iDDGP Reference
+
+This document keeps the longer reference material for the public
+`pdb-parser` / `instance-remap` workflow. The `README.md` stays focused on
+installation and operational usage; this file keeps the more detailed
+theoretical and configuration notes.
+
+## PDB list
+
+The file `data/pdb_ids.txt` contains one PDB identifier per line, for example:
+
+```txt
+1TOS
+1UAO
+```
+
+Each identifier corresponds to one structure processed by the pipeline.
+
+## Parser configuration reference
+
+### Method, model and chain
+
+- `method`: `auto`, `nmr`, or `xray`; `auto` detects NMR or X-ray diffraction from `EXPDTA`
+- `model_number`: selected model (1-based); a one-model X-ray coordinate set is used as model 1
+- `chain_id`: selected chain in that model
+
+### Atom selection
+
+The parser accepts four atom selections: `full_chain`, `backbone`,
+`backbone_plus_hydrogens`, and `backbone_plus_neighbors`. Only two of them
+produce remappable DDGP/iDDGP instances:
+
+- `backbone`
+- `backbone_plus_hydrogens`
+
+`backbone` corresponds to backbone atoms `N`, `CA`, `C`.
+
+`backbone_plus_hydrogens` corresponds to backbone atoms `N`, `CA`, `C`
+plus the directly attached hydrogens required by the current iDDGP
+construction.
+
+The public remap stage supports both layouts:
+
+- for `backbone`, `T_*` uses the simplified chain rule
+  `i, i-1, i-2, i-3, sign_tau, abs_tau, delta_tau`;
+- for `backbone_plus_hydrogens`, `T_*` uses the DDGP/iDDGP clique
+  patterns described later in this reference.
+
+Method restrictions are part of this interface: `backbone` is remappable for
+NMR and X-ray, and `backbone_plus_hydrogens` is remappable only for NMR.
+`full_chain` and `backbone_plus_neighbors` are parser-only layouts.
+
+`backbone_plus_neighbors` is a public parser selection, including the effective
+X-ray fallback for `backbone_plus_hydrogens`, but is not remappable. It can
+generate filtered atoms and parser constraints but is not a public remapping
+input. The
+same is true of `output_mode: filtered_atoms`, which does not create `X_*`,
+`A_*`, or `I_*`.
+
+### Protein-chain model
+
+For residue `i`, the backbone is represented by `{N_i, Cα_i, C_i}` and
+the torsions are:
+
+- `phi_i := C_{i-1} - N_i - Cα_i - C_i`
+- `psi_i := N_i - Cα_i - C_i - N_{i+1}`
+- `omega_i := Cα_{i-1} - C_{i-1} - N_i - Cα_i`
+
+Only the backbone is modeled explicitly. Side chains are not part of the
+generated instances.
+
+Residue-specific hydrogen handling:
+
+- standard residues use one amide hydrogen among `H`, `H1`, `H2`, `H3`, plus `HA`
+- glycine uses `HA2` when available, otherwise `HA3`
+- proline uses one of `HD2` or `HD3` as the `HN` surrogate, plus `HA`: the parser
+  keeps the one nearer the `HA` of the previous residue (the `HA(k-1)--HD(k)`
+  NOE places it in orders 7 to 10)
+
+During remapping, these concrete names are resolved to the logical labels:
+
+- `HN -> H1`, `H`, `HD2`, or `HD3`
+- `HA -> HA`, `HA2`, or `HA3`
+
+### Constraint families
+
+The final parser output `I_*` is built by merging:
+
+- covalent and local geometric distances
+- planar peptide-group distances
+- optional van der Waals lower bounds
+- NMR H--H distances derived from the reference structure, or X-ray CA--CA
+  long-range distances
+- distances induced by sampled backbone torsion intervals
+
+## Distance-constraint modes
+
+Public values of `distance_constraints`:
+
+- `precise`
+- `interval_centered`
+- `interval_experimental`
+
+### `precise`
+
+Stores exact long-range distances `[d_ij, d_ij]` for accepted pairs: H--H (or
+N/C proxy pairs in backbone mode) for NMR, and CA--CA pairs for X-ray.
+
+Relevant parameter:
+
+- `max_distance`
+
+This mode also forces:
+
+- `torsion_angle_width = 0`
+- `percentage_backbone_torsion_angles = 100`
+
+### `interval_centered`
+
+Builds synthetic intervals around the reference PDB distance using:
+
+- `epsilon_short`
+- `epsilon_long`
+- `vdwr_hh`
+- `max_distance`
+
+For X-ray, only `epsilon_long` and `max_distance` are used; the CA--CA lower
+bound is internal. `epsilon_short` and `vdwr_hh` are NMR-only.
+
+### `interval_experimental`
+
+This mode is NMR-only. For X-ray, it is converted to `interval_centered` with
+a warning; `noe_strong`, `noe_medium`, `noe_weak`, and `vdwr_hh` are ignored.
+
+Builds NOESY-like intervals using:
+
+- `noe_strong`
+- `noe_medium`
+- `noe_weak`
+- `vdwr_hh`
+
+In both interval modes the lower bound is `vdwr_hh` when it is below the
+reference distance `d`; otherwise it is the first of 90%, 80%, ..., 10% of
+`vdwr_hh` below `d`, or `0.9 d` if even 10% is not below it. The same rule
+lowers the van der Waals lower bounds and the X-ray CA--CA lower bound, so the
+reference structure always satisfies its own intervals (NMR models contain H--H
+pairs closer than `1.8` Å).
+
+### Subset of the NMR H--H constraints
+
+`percentage_hh_distance_constraints` (optional, `0`--`100`, default `100`) keeps
+only that percentage of the NMR H--H (NOE-like) constraints generated by the
+selected mode, i.e. every H--H pair it accepts, at any sequence separation.
+The H--H pairs used as discretization edges by the remap stage, `HN_i--HA_i` and
+`HA_{i-1}--HN_i`, are always kept (`HN` and `HA` are resolved as in the remap
+stage). Of the other `n` pairs, `round(p · n / 100)` are drawn uniformly at random
+without replacement; the rest are discarded before the merge. It applies to the three
+modes, including `precise`, and to the N/C proxy pairs of `backbone`.
+Covalent, planar, peptide-group, van der Waals and torsion-derived distances are
+never discarded. The draw uses its own seed (`seed_hh_distance_subset`) and
+happens after every interval is built, so the kept constraints are identical to
+those of a run at `100`. It is ignored for X-ray.
+
+## Torsion-angle intervals
+
+The parser writes sampled `omega/phi/psi` intervals to `A_*`, converts
+them into additional distance intervals, and merges them into `I_*`.
+
+The width is controlled by:
+
+- `torsion_angle_width`
+- `percentage_backbone_torsion_angles`
+
+`tightening_upper_bounds: yes` replaces every upper bound in `I_*` by its
+shortest path in the graph whose edges are the finite (`<= 998`) upper bounds,
+after all constraints are merged. This includes the `999` upper bounds of the van
+der Waals rows, which then get the shortest-path value; a pair without a finite
+path is an error. It is optional and defaults to `no`; it no longer depends on
+`vdw_constraints`.
+
+When `distance_constraints = precise`, the parser also normalizes
+`vdw_constraints` and `tightening_upper_bounds` to `no`.
+
+## Parser configuration examples
+
+Interval-centered example:
+
+```txt
+model_number: 1
+chain_id: A
+atom_selection: backbone_plus_hydrogens
+distance_constraints: interval_centered
+epsilon_short: 1.0
+epsilon_long: 2.0
+max_distance: 5.0
+vdwr_hh: 1.8
+vdw_constraints: yes
+tightening_upper_bounds: yes
+torsion_angle_width: 50.0
+percentage_backbone_torsion_angles: 100.0
+```
+
+Experimental example:
+
+```txt
+model_number: 1
+chain_id: A
+atom_selection: backbone_plus_hydrogens
+distance_constraints: interval_experimental
+noe_strong: 2.5
+noe_medium: 3.5
+noe_weak: 5.0
+vdwr_hh: 1.8
+vdw_constraints: yes
+tightening_upper_bounds: yes
+torsion_angle_width: 50.0
+percentage_backbone_torsion_angles: 100.0
+```
+
+Precise example:
+
+```txt
+model_number: 1
+chain_id: A
+atom_selection: backbone_plus_hydrogens
+distance_constraints: precise
+max_distance: 5.0
+vdwr_hh: 1.8
+vdw_constraints: yes
+tightening_upper_bounds: yes
+torsion_angle_width: 0.0
+percentage_backbone_torsion_angles: 100.0
+```
+
+## Remapping configuration reference
+
+Public `instance_remap.cfg` parameters:
+
+- `model_number`
+- `chain_id`
+- `order_id`
+
+This release documents only the public remap interface. Additional internal
+helpers or experimental code paths should not be interpreted as supported
+input-surface guarantees.
+
+Supported `order_id` values: the fixed integers `1..10`, alone or as a list of values and
+ranges (`1-10`, `1,3,9`); one remap call writes every listed order.
+
+For `backbone`, `order_id` and `order_type` are part of the public remap
+interface only to keep the stage configuration uniform. It does not affect the remapped `X_*`, `I_*`,
+or `T_*` outputs, because this layout always uses the fixed per-residue order
+`N, CA, C` and writes `*_dmdgp_order.dat`.
+
+### Internal-residue patterns
+
+- `order_id=1`: `N, CA, C, HN, HA`
+- `order_id=2`: `N, CA, C, HA, HN`
+- `order_id=3`: `N, CA, HN, HA, C`
+- `order_id=4`: `N, CA, HN, C, HA`
+- `order_id=5`: `N, HN, CA, HA, C`
+- `order_id=6`: `N, HN, CA, C, HA`
+- `order_id=7`: `HN, N, CA, HA, C`
+- `order_id=8`: `HN, N, CA, C, HA`
+- `order_id=9`: `HN, CA, N, HA, C`
+- `order_id=10`: `HN, CA, N, C, HA`
+
+### iDMDGP re-orders (`order_type: redmdgp`)
+
+Each re-order has one pattern for residue 1, one for residues 2 to `n-1`, and
+one for residue `n`. `[X]` is a new atom; a suffix marks the interval that
+places the atom from `i-3` (`ψ`, `φ` or `NOE`); no suffix means an exact
+distance or the same atom. `1` is residue `k-1` and `2` is residue `k`.
+
+| order | residues 2 to n-1 |
+|---|---|
+| 1 | `[N2]ψ [CA2] [C2]φ N2 CA2 C1φ [HN2] CA1 C1 N2 CA2 C2φ [HA2] N2 CA2 C2` |
+| 2 | `[N2]ψ [CA2] [C2]φ [HA2] CA2 C2 N2 CA2 C1φ [HN2] CA1 C1 N2 CA2 C2φ` |
+| 3 | `[N2]ψ [CA2] [HN2] N2 CA2 [HA2]NOE N2 CA2 [C2]` |
+| 4 | `[N2]ψ [CA2] [HN2] C1 N2 CA2 [C2]φ [HA2] N2 CA2 C2` |
+| 5 | `[N2]ψ [HN2] [CA2] N2 [HA2]NOE [C2] N2 CA2 C2` |
+| 6 | `[N2]ψ [HN2] C1 N2 [CA2] [C2]φ [HA2] N2 CA2 C2` |
+| 7 | `[HN2]NOE [N2] [CA2] [HA2]NOE [C2] CA2` |
+| 8 | `[HN2]NOE C1 [N2] [CA2] [C2]φ N2 [HA2] C2 CA2` |
+| 9 | `[HN2]NOE [CA2] [N2] [HA2]NOE [C2] CA2` |
+| 10 | `[HN2]NOE [CA2] C1 [N2] CA2 [C2]φ [HA2] CA2 C2` |
+
+Residue `n` uses the same pattern cut after its last new atom. Residue 1
+depends on the N-terminal hydrogens (`n1 n2 n3` in the order of the first-residue
+pattern) and on the order:
+
+| N terminus | orders 1 to 6 | orders 7 to 10 |
+|---|---|---|
+| three hydrogens | `n1 n2 n3 N CA [HA]NOE N CA C` | `n1 n2 n3 N CA [HA]NOE C CA` |
+| two hydrogens | `n1 n2 N CA [HA]NOE N CA C` | `n1 n2 N CA [HA]NOE C CA` |
+| one hydrogen | `N CA C HA N CA [H]NOE N CA HA·NOE N CA C` | `N CA C HA N CA [H]NOE N CA HA·NOE C CA` |
+
+The H--H pairs these patterns rely on (`HN_i--HA_i` and `HA_{i-1}--HN_i`) are
+never discarded by `percentage_hh_distance_constraints`.
+
+### Remapping outputs
+
+The remapping stage writes:
+
+- `X_*_ddgp_hc_order_<order_id>.dat`
+- `I_*_ddgp_hc_order_<order_id>.dat`
+- `T_*_ddgp_hc_order_<order_id>.dat`
+
+With `order_type: redmdgp`, the suffix is `*_redmdgp_order_<order_id>.dat`.
+
+For the `backbone` layout, the suffix is always `*_dmdgp_order.dat`.
+
+### Remapping examples
+
+Fixed order:
+
+```txt
+model_number: 1
+chain_id: A
+order_id: 9
+```

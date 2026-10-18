@@ -40,14 +40,6 @@ dist/
 *~
 
 # -----------------------------
-# Local agent/tool state
-# -----------------------------
-.codex
-.codex/
-**/.codex
-**/.codex/
-
-# -----------------------------
 # IDEs and editors
 # -----------------------------
 .vscode/
@@ -65,6 +57,7 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+.ruff_cache/
 
 # -----------------------------
 # Python version manager
@@ -78,10 +71,8 @@ htmlcov/
 *.dylib
 
 # -----------------------------
-# Data files (optional)
+# Runtime data (downloaded PDB files, seeds and generated instances)
 # -----------------------------
-data/outputs/*
-!data/outputs/.gitkeep
-data/pdb/*
-!data/pdb/.gitkeep
-
+data/outputs/
+data/pdb/
+data/seeds/

@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this code, please cite the following preprint:"
 authors:
   - family-names: "da Rocha"
-    given-names: "Wagner A. A."
+    given-names: "Wagner"
   - family-names: "Lavor"
     given-names: "Carlile"
   - family-names: "Liberti"
@@ -14,8 +14,8 @@ authors:
   - family-names: "Malliavin"
     given-names: "Therese E."
 title: "An Angle-Based Algorithmic Framework for the Interval Discretizable Distance Geometry Problem"
-version: "0.2.0"
-date-released: 2026-05-20
+version: "0.3.0"
+date-released: 2026-10-18
 identifiers:
   - type: url
     value: "https://arxiv.org/abs/2508.09143"
@@ -26,7 +26,7 @@ preferred-citation:
   title: "An Angle-Based Algorithmic Framework for the Interval Discretizable Distance Geometry Problem"
   authors:
     - family-names: "da Rocha"
-      given-names: "Wagner A. A."
+      given-names: "Wagner"
     - family-names: "Lavor"
       given-names: "Carlile"
     - family-names: "Liberti"

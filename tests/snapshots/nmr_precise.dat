@@ -1,0 +1,3 @@
+atom_id_i	atom_id_j	resid_i	resid_j	d_l	d_u	atom_name_i	atom_name_j	resname_i	resname_j
+2	1	2	1	2.000000000000	2.000000000000	H	H	ALA	ALA
+3	2	3	2	2.000000000000	2.000000000000	H	H	ALA	ALA

@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import numpy as np
 
-# -----------------------------------------------------------------------------------------------------
+Point = np.ndarray
+
+
 def lambda_function(dwv: float, dzv: float, dzw: float) -> float:
 	"""
 	Compute the lambda parameter associated with a triangle projection.
@@ -13,7 +17,7 @@ def lambda_function(dwv: float, dzv: float, dzw: float) -> float:
 
 	return (dzv * dzv + dwv * dwv - dzw * dzw) / (2.0 * dwv)
 
-# -----------------------------------------------------------------------------------------------------
+
 def rho2_function(dzv: float, lambda_value: float) -> float:
 	"""
 	Compute the squared rho parameter.
@@ -29,7 +33,7 @@ def rho2_function(dzv: float, lambda_value: float) -> float:
 
 	return rho2_value
 
-# -----------------------------------------------------------------------------------------------------
+
 def torsion_angle_parameters(
 	d12: float,
 	d13: float,
@@ -68,12 +72,12 @@ def torsion_angle_parameters(
 
 	return float(p), float(q)
 
-# -----------------------------------------------------------------------------------------------------
+
 def torsion_angle_2_endpoint_distance(
-	x1: np.ndarray,
-	x2: np.ndarray,
-	x3: np.ndarray,
-	x4: np.ndarray,
+	x1: Point,
+	x2: Point,
+	x3: Point,
+	x4: Point,
 	tau_rad: float,
 ) -> float:
 	"""
@@ -102,7 +106,7 @@ def torsion_angle_2_endpoint_distance(
 
 	return float(np.sqrt(d14_sq))
 
-# -----------------------------------------------------------------------------------------------------
+
 def distances_2_abs_torsion_angle(
 	d12: float,
 	d13: float,
@@ -128,24 +132,43 @@ def distances_2_abs_torsion_angle(
 	cos_tau = float(np.clip(cos_tau, -1.0, 1.0))
 
 	return float(np.arccos(cos_tau))
-# -----------------------------------------------------------------------------------------------------
-def abs_torsion_angle_with_points(x1, x2, x3, x4):
+
+
+def abs_torsion_angle_with_points(
+	x1: Point,
+	x2: Point,
+	x3: Point,
+	x4: Point,
+) -> float:
+	"""Return the absolute torsion angle induced by four points."""
 	d12 = np.linalg.norm(x1 - x2)
 	d13 = np.linalg.norm(x1 - x3)
 	d14 = np.linalg.norm(x1 - x4)
 	d23 = np.linalg.norm(x2 - x3)
 	d24 = np.linalg.norm(x2 - x4)
 	d34 = np.linalg.norm(x3 - x4)
-	
+
 	return distances_2_abs_torsion_angle(d12, d13, d14, d23, d24, d34)
-# -----------------------------------------------------------------------------------------------------	
-def sign_torsion_angle(x1, x2, x3, x4):
+
+
+def sign_torsion_angle(
+	x1: Point,
+	x2: Point,
+	x3: Point,
+	x4: Point,
+) -> float:
+	"""Return the orientation sign associated with the torsion defined by four points."""
 	normal_plane = np.cross(x3 - x2, x1 - x2)
 	direction = x4 - x2
-	
-	return np.sign(np.dot(normal_plane, direction))
-# -----------------------------------------------------------------------------------------------------
-def torsion_angle_with_points(x1, x2, x3, x4):
-	
-	return sign_torsion_angle(x1, x2, x3, x4) * abs_torsion_angle_with_points(x1, x2, x3, x4)
 
+	return float(np.sign(np.dot(normal_plane, direction)))
+
+
+def torsion_angle_with_points(
+	x1: Point,
+	x2: Point,
+	x3: Point,
+	x4: Point,
+) -> float:
+	"""Return the signed torsion angle induced by four points."""
+	return sign_torsion_angle(x1, x2, x3, x4) * abs_torsion_angle_with_points(x1, x2, x3, x4)

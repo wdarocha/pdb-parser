@@ -1,0 +1,7 @@
+HEADER    UNKNOWN RESIDUE FIXTURE
+EXPDTA    SOLUTION NMR
+ATOM      1  N   MSE A   1       0.000   0.000   0.000  1.00 20.00           N
+ATOM      2  CA  MSE A   1       1.000   0.000   0.000  1.00 20.00           C
+ATOM      3  C   MSE A   1       2.000   0.000   0.000  1.00 20.00           C
+TER
+END
