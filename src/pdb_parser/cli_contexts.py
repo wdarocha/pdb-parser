@@ -7,8 +7,8 @@ from pathlib import Path
 from pdb_parser.pipeline import validate_public_parser_params
 from pdb_parser.public_config import (
 	parse_public_order_choice,
-	parse_public_order_choices,
 	parse_public_order_types,
+	parse_public_remap_order_choices,
 	validate_public_remap_params,
 )
 from pdb_parser.utils import ensure_dir, ensure_existing_dir, read_params, read_pdb_ids
@@ -53,7 +53,7 @@ def load_public_remap_order_choice(params: dict[str, str]) -> int | str:
 
 def load_public_remap_order_choices(params: dict[str, str]) -> list[int]:
 	"""Return the validated public remap order ids (one value, a list or ranges)."""
-	return parse_public_order_choices(params["order_id"])
+	return parse_public_remap_order_choices(params)
 
 
 def load_public_remap_order_types(params: dict[str, str]) -> list[str]:

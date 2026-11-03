@@ -14,8 +14,8 @@ authors:
   - family-names: "Malliavin"
     given-names: "Therese E."
 title: "An Angle-Based Algorithmic Framework for the Interval Discretizable Distance Geometry Problem"
-version: "0.3.0"
-date-released: 2026-10-18
+version: "0.4.0"
+date-released: 2026-11-03
 identifiers:
   - type: url
     value: "https://arxiv.org/abs/2508.09143"

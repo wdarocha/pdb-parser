@@ -121,10 +121,10 @@ def test_build_first_residue_pattern_follows_the_x_order_of_every_seven_atom_pat
 	available_atoms = [(1, name) for name in ("N", "CA", "C", "HA", *n_terminal)]
 
 	rows = build_first_residue_pattern(available_atoms, 1)
-	n1, n2, n3 = expected_order
+	h1, h2, h3 = expected_order
 
-	assert [row[0][-1] for row in rows] == [(1, n1), (1, n2), (1, n3), (1, "N"), (1, "CA"), (1, "HA"), (1, "C")]
-	assert rows[5] == ([(1, n3), (1, "N"), (1, "CA"), (1, "HA")], 2)
+	assert [row[0][-1] for row in rows] == [(1, h1), (1, h2), (1, h3), (1, "N"), (1, "CA"), (1, "HA"), (1, "C")]
+	assert rows[5] == ([(1, h3), (1, "N"), (1, "CA"), (1, "HA")], 2)
 
 
 @pytest.mark.parametrize("rename", [{"H2": "H"}, {"H3": "H"}])

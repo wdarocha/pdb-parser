@@ -25,7 +25,11 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from pdb_parser.geometry import distances_2_abs_torsion_angle, torsion_angle_with_points
+from pdb_parser.geometry import (
+    distances_2_abs_torsion_angle,
+    known_torsion_sign,
+    torsion_angle_with_points,
+)
 
 from .contracts import AtomRefList
 from .ordering import first_residue_order, get_ha_group, get_nonterminal_h_group
@@ -64,19 +68,19 @@ REDMDGP_INTERNAL_PATTERNS: dict[int, tuple[PatternEntry, ...]] = {
 REDMDGP_ENTRY = {order_id: ("A" if order_id <= 6 else "B") for order_id in REDMDGP_INTERNAL_PATTERNS}
 
 # Residue 1, by DDGP first-residue layout (``first_residue_order``):
-#   7 atoms: n1 n2 n3 N CA ha C   (three N-terminal hydrogens, e.g. H3 H2 H1)
-#   6 atoms: n1 n2 N CA ha C      (two N-terminal hydrogens, e.g. H2 H1)
+#   7 atoms: h1 h2 h3 N CA ha C   (three N-terminal hydrogens, e.g. H3 H2 H1)
+#   6 atoms: h1 h2 N CA ha C      (two N-terminal hydrogens, e.g. H2 H1)
 #   5 atoms: N CA C ha h          (one N-terminal hydrogen)
 REDMDGP_FIRST_RESIDUE_LAYOUTS: dict[int, tuple[str, ...]] = {
-    7: ("n1", "n2", "n3", "N", "CA", "ha", "C"),
-    6: ("n1", "n2", "N", "CA", "ha", "C"),
+    7: ("h1", "h2", "h3", "N", "CA", "ha", "C"),
+    6: ("h1", "h2", "N", "CA", "ha", "C"),
     5: ("N", "CA", "C", "ha", "h"),
 }
 REDMDGP_FIRST_RESIDUE_PATTERNS: dict[tuple[int, str], tuple[str, ...]] = {
-    (7, "A"): ("n1", "n2", "n3", "N", "CA", "ha", "N", "CA", "C"),
-    (7, "B"): ("n1", "n2", "n3", "N", "CA", "ha", "C", "CA"),
-    (6, "A"): ("n1", "n2", "N", "CA", "ha", "N", "CA", "C"),
-    (6, "B"): ("n1", "n2", "N", "CA", "ha", "C", "CA"),
+    (7, "A"): ("h1", "h2", "h3", "N", "CA", "ha", "N", "CA", "C"),
+    (7, "B"): ("h1", "h2", "h3", "N", "CA", "ha", "C", "CA"),
+    (6, "A"): ("h1", "h2", "N", "CA", "ha", "N", "CA", "C"),
+    (6, "B"): ("h1", "h2", "N", "CA", "ha", "C", "CA"),
     # One N-terminal hydrogen: its only non-exact information is the h-ha NOE, so leaving the
     # window after h needs one copy of ha placed by that NOE.
     (5, "A"): ("N", "CA", "C", "ha", "N", "CA", "h", "N", "CA", "ha", "N", "CA", "C"),
@@ -209,9 +213,14 @@ def build_redmdgp_distance_rows(
     - every position gets its pairs with i-1, i-2 and i-3 (``[0, 0]`` when i-3 is the same atom);
     - a new atom also gets every parser restraint with atoms already placed, on their first
       occurrence (unless that atom is in the window);
-    - a copy whose i-3 distance is an interval also gets ``[0, 0]`` with its first occurrence, so
-      the solver intersects that interval down to the angle already chosen.
-    Each parser restraint appears on exactly one pair of first occurrences or window positions.
+    - every copy has exactly one ``[0, 0]``, with the previous occurrence of its atom: the i-3
+      pair when that occurrence is i-3, otherwise an extra row. It states in I that both
+      vertices are one atom, checks a copy placed by its known torsion sign, and lets the
+      solver cut the interval of a copy placed by an interval down to that point;
+    - a copy whose i-3 is the same atom also gets i-4, at the exact distance d(i-3, i-4) (the
+      i-1 pair of i-3), so every copy has four predecessors, one of them at distance 0.
+    Each parser restraint appears on one pair of first occurrences or window positions, and
+    again on the i-4 pair of such a copy.
     """
     partners: dict[int, list[int]] = {}
     for a, b in zip(df_I.iloc[:, 0].astype(int).tolist(), df_I.iloc[:, 1].astype(int).tolist()):
@@ -219,6 +228,7 @@ def build_redmdgp_distance_rows(
         partners.setdefault(b, []).append(a)
 
     first_position: dict[int, int] = {}
+    last_position: dict[int, int] = {}
     rows: list[tuple[int, int, float, float]] = []
     for position, atom in enumerate(sequence):
         window = range(max(0, position - 3), position)
@@ -232,9 +242,11 @@ def build_redmdgp_distance_rows(
                 if other in first_position and other not in window_atoms:
                     rows.append((position + 1, first_position[other] + 1, *distances[frozenset((atom, other))]))
             first_position[atom] = position
-        elif position >= 3 and sequence[position - 3] != atom:
-            if not _is_exact(distances[frozenset((atom, sequence[position - 3]))]):
-                rows.append((position + 1, first_position[atom] + 1, 0.0, 0.0))
+        elif last_position[atom] != position - 3:
+            rows.append((position + 1, last_position[atom] + 1, 0.0, 0.0))
+        elif position >= 4:
+            rows.append((position + 1, position - 3, *distances[frozenset((atom, sequence[position - 4]))]))
+        last_position[atom] = position
     return rows
 
 
@@ -259,20 +271,22 @@ def _torsion_from_angles(
     atoms: dict[int, tuple[str, int]],
     angles: dict[int, tuple],
 ) -> tuple[float, float, float] | None:
-    """Return ``(sign, |tau|, delta)`` from A when the window is the phi or psi dihedral.
+    """Return ``(sign, |tau|, delta)`` from A when the window holds the phi or psi atoms.
 
     phi(k) is C(k-1)-N(k)-CA(k)-C(k) and psi(k-1) is N(k-1)-CA(k-1)-C(k-1)-N(k); a dihedral read
-    backwards has the same value.
+    backwards has the same value, and swapping its two end atoms (e.g. C(k)-N(k)-CA(k)-C(k-1),
+    the copy of C(k-1) in orders 1 and 2) negates it.
     """
     names = tuple(atoms[atom] for atom in window_atoms)
-    for candidate in (names, names[::-1]):
+    swapped = (names[3], names[1], names[2], names[0])
+    for candidate, flip in ((names, 1.0), (names[::-1], 1.0), (swapped, -1.0), (swapped[::-1], -1.0)):
         (n3, r3), (n2, r2), (n1, r1), (n0, r0) = candidate
         if (n3, n2, n1, n0) == ("C", "N", "CA", "C") and r3 == r2 - 1 and r2 == r1 == r0:
             value, delta = float(angles[r0][4]), float(angles[r0][5])
-            return float(np.sign(value)), abs(value), delta
+            return flip * known_torsion_sign(value), abs(value), delta
         if (n3, n2, n1, n0) == ("N", "CA", "C", "N") and r3 == r2 == r1 and r0 == r1 + 1:
             value, delta = float(angles[r1][6]), float(angles[r1][7])
-            return float(np.sign(value)), abs(value), delta
+            return flip * known_torsion_sign(value), abs(value), delta
     return None
 
 
@@ -284,8 +298,9 @@ def build_redmdgp_clique_matrix(
 ) -> np.ndarray:
     """Return T rows ``(i, i-1, i-2, i-3, sign, |tau|, delta)`` for the re-order (degrees).
 
-    - i-3 is the same atom: torsion 0;
-    - exact i-3 distance: signed torsion of the reference coordinates;
+    - i-3 is the same atom: torsion 0, with sign +1 (both signs give the same point, and a known
+      sign leaves the solver a single candidate);
+    - exact i-3 distance: signed torsion of the reference coordinates (+1 for a torsion of 0);
     - phi/psi dihedral window: the A interval, with its sign;
     - any other interval (NOE, or a torsion-derived distance in another window): the |tau| interval
       equivalent to the i-3 distance interval, with unknown sign (0).
@@ -305,11 +320,12 @@ def build_redmdgp_clique_matrix(
             continue
         p3, p2, p1 = sequence[position - 3: position]
         if p3 == atom:
+            matrix[position, 4] = 1.0
             continue
         bounds = distances[frozenset((atom, p3))]
         if _is_exact(bounds):
             tau = torsion_angle_with_points(coordinates[p3], coordinates[p2], coordinates[p1], coordinates[atom])
-            matrix[position, 4:7] = (np.sign(tau), abs(tau) * 180.0 / np.pi, 0.0)
+            matrix[position, 4:7] = (known_torsion_sign(tau), abs(tau) * 180.0 / np.pi, 0.0)
             continue
         from_angles = _torsion_from_angles((p3, p2, p1, atom), atoms, angles)
         if from_angles is not None:

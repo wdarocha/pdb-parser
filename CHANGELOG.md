@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.4.0
+
+Parser outputs are unchanged. In the remap stage every file is renamed; the contents of
+`ddgp` and `backbone` outputs are unchanged, and `redmdgp` `I_*` and `T_*` change (below).
+
+### Breaking changes
+
+- Remapped suffixes: `*_ddgp_order_<N>.dat` (was `*_ddgp_hc_order_<N>.dat`) and
+  `*_redmdgp_hc_order_<N>.dat` (was `*_redmdgp_order_<N>.dat`). `hc` (hand-crafted) now
+  marks only the `redmdgp` patterns.
+
+### New
+
+- `order_type: dmdgp` requests the fixed DMDGP order `N CA C` of `backbone` outputs (NMR or
+  X-ray), without `order_id`. It cannot be combined with `ddgp` or `redmdgp`, and
+  `backbone_plus_hydrogens` outputs reject it. `ddgp` or `redmdgp` on `backbone` outputs
+  still write that order, with a warning suggesting `order_type: dmdgp`.
+
+### Changes in `redmdgp` outputs
+
+- Every copy of an atom has four predecessors, one of them a `[0, 0]` with the previous
+  occurrence: when that occurrence is `i-3`, `i-4` is added at `d(i-3, i-4)`; otherwise the
+  zero is an extra row (before, only a copy placed by an interval had it). `I_*` grows by
+  up to about 2%.
+- `T_*` signs: a torsion of 0 has sign `+1` (in every `T_*`; `0` means an unknown sign), and
+  the copy of `C(k-1)` placed from `C(k) N(k) CA(k)` (orders 1 and 2) gets the sign of
+  `-phi(k)` with the `phi` interval of `A_*`, instead of sign `0`.
+
+### Documentation
+
+- A step-by-step `order_type: dmdgp` example (`docs/remap_stage.md`, README);
+  `data/instance_remap.cfg` lists the remappable outputs per method.
+- `redmdgp` pattern legend: N-terminal hydrogens labelled `h1 h2 h3` (placement order, was
+  `n1 n2 n3`), and a marked copy does not branch the search.
+- `data/params.cfg`: `max_distance` also applies to `precise`, and `interval_experimental`
+  uses neither the epsilons nor `max_distance`.
+
 ## 0.3.0
 
 Except for the fixes below, the interval formulas, van der Waals radii, planar

@@ -65,6 +65,9 @@ temporary copy of `instance_remap.cfg` and runs a single remap call, which reads
 the parser files once per structure and writes every order. With `--log-dir`,
 this call logs to `remap_all.log`.
 
+`--orders` has no effect for `order_type: dmdgp` (`backbone` outputs): the list is
+checked, and the single DMDGP order is written once. Use `--mode remap` there.
+
 ## Intermediate files
 
 `--keep-tmp` is passed to the parser stage, which then keeps the intermediate

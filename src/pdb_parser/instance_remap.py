@@ -18,7 +18,9 @@ The remapping configuration uses one ``key: value`` pair per line; blank
 lines and comments beginning with ``#`` are ignored. ``order_id`` accepts
 the fixed values ``1`` through ``10``, alone or as a list such as ``1-10`` or
 ``1,3,9``; ``order_type`` accepts ``ddgp``, ``redmdgp`` or both, comma-separated.
-Every combination is written from one reading of the parser files.
+Every combination is written from one reading of the parser files. For ``backbone``
+outputs, ``order_type: dmdgp`` writes the fixed DMDGP order ``N CA C`` without
+``order_id``; it cannot be combined with the other types.
 """
 
 from __future__ import annotations

@@ -67,10 +67,11 @@ The configuration file uses the same `key: value` syntax as the parser
 configuration. The wrapper's `remap-all` mode passes its `--orders` list to one
 remap call in the same syntax.
 
-For parser outputs generated with `atom_selection: backbone`, `order_id` and
-`order_type` are accepted by the public config for interface consistency, but
-they are ignored by the remap stage. In this layout the atom order is fixed to `N, CA, C` per
-residue, and the outputs always use the `*_dmdgp_order.dat` suffix.
+For parser outputs generated with `atom_selection: backbone`, the atom order is fixed
+to `N, CA, C` per residue (a DMDGP order) and the outputs always use the
+`*_dmdgp_order.dat` suffix. Request it explicitly with `order_type: dmdgp`, which
+needs no `order_id`; with `ddgp` or `redmdgp`, the same order is written with a
+warning that `order_id` and `order_type` were ignored.
 
 Among the fixed values, `order_id=1` corresponds to the preprint
 `A hybrid combinatorial-continuous strategy for solving molecular distance geometry problems`
@@ -88,17 +89,51 @@ rigidity of protein graphs*, Discrete Appl. Math. 256 (2019) 91-104, Def. 3).
 It applies to `backbone_plus_hydrogens` outputs and requires an integer
 `order_id`; for `backbone` outputs it is ignored, like `order_id`.
 
+`order_type: dmdgp` requests the fixed DMDGP order of `backbone` outputs (NMR or
+X-ray); `order_id` is then optional and ignored. It cannot be combined with `ddgp`
+or `redmdgp`, and `backbone_plus_hydrogens` outputs reject it as a data issue.
+
+### Example: the DMDGP order of `backbone` outputs
+
+1. In `data/params.cfg`, set `atom_selection: backbone` and
+   `output_mode: parser_outputs`, then run the parser (`X_*`, `A_*`, `I_*`).
+2. In `data/instance_remap.cfg`, set:
+
+   ```text
+   model_number: 1
+   chain_id: A
+   order_type: dmdgp
+   ```
+
+   `order_id` can be removed; if it is kept, it is checked and ignored.
+3. Run the remap stage:
+
+   ```bash
+   instance-remap data/pdb_ids.txt data/instance_remap.cfg data/outputs
+   ```
+
+   It writes `X_*`, `I_*` and `T_*` with the suffix `_dmdgp_order.dat` to
+   `data/outputs/<pdb_id>/remapped/`. `./run_pipeline.sh --mode full` runs both
+   stages with the same files.
+
 - `X_*`: one row per re-order position; a repeated atom (copy) repeats the
   coordinates.
 - `I_*`: every position has its pairs with `i-1`, `i-2` and `i-3` (`[0, 0]`
   when `i-3` is the same atom). A new atom also gets every parser restraint
-  with the atoms already placed, on their first occurrence. A copy whose `i-3`
-  distance is an interval also gets `[0, 0]` with its first occurrence. Every
-  parser restraint is kept.
-- `T_*`: rows `i, i-1, i-2, i-3`. The torsion is 0 for a repeat at `i-3`, the
-  signed reference torsion for an exact `i-3` distance, the `A_*` interval
-  (with sign) for the phi/psi dihedral, and otherwise the `|tau|` interval
-  equivalent to the `i-3` distance interval, with sign 0.
+  with the atoms already placed, on their first occurrence. Every copy has
+  exactly one `[0, 0]`, with the previous occurrence of its atom: the `i-3` pair
+  when that occurrence is `i-3`, otherwise an extra row. The `I_*` file then
+  states that both vertices are one atom. A copy whose `i-3` is the same atom
+  also gets `i-4`, at the exact distance `d(i-3, i-4)`, so every copy has four
+  predecessors, one of them at distance 0. Every parser restraint is
+  kept.
+- `T_*`: rows `i, i-1, i-2, i-3`. The torsion is 0 with sign `+1` for a repeat
+  at `i-3` (both signs give the same point), the signed reference torsion for an
+  exact `i-3` distance, the `A_*` interval with its sign for the phi/psi atoms
+  (sign reversed when the window swaps their end atoms, as for the copy of
+  `C(k-1)` in orders 1 and 2), and otherwise the `|tau|` interval equivalent to
+  the `i-3` distance interval, with sign 0. A copy left with sign 0 is placed
+  at its previous occurrence by the `[0, 0]` restraint above.
 
 The residue patterns of each order are listed in `data/instance_remap.cfg` and
 in `docs/remap_reference.md`. Before writing, the remap checks that every
@@ -114,15 +149,15 @@ data/outputs/<pdb_id>/remapped/
 
 Main remapped outputs:
 
-- `X_<pdb_id>_model<model_number>_chain<chain_id>_ddgp_hc_order_<order_id>.dat`
+- `X_<pdb_id>_model<model_number>_chain<chain_id>_ddgp_order_<order_id>.dat`
   Coordinate-only file in remapped atom order.
   Columns: `x y z`
   Format: `%9.3f %9.3f %9.3f`
-- `I_<pdb_id>_model<model_number>_chain<chain_id>_ddgp_hc_order_<order_id>.dat`
+- `I_<pdb_id>_model<model_number>_chain<chain_id>_ddgp_order_<order_id>.dat`
   Remapped distance-constraint file.
   Columns: `atom_id_i atom_id_j resid_i resid_j d_l d_u atom_name_i atom_name_j resname_i resname_j`
   Format: `%5d %5d %6d %6d %16.12f %16.12f %4s %4s %s %s`
-- `T_<pdb_id>_model<model_number>_chain<chain_id>_ddgp_hc_order_<order_id>.dat`
+- `T_<pdb_id>_model<model_number>_chain<chain_id>_ddgp_order_<order_id>.dat`
   Clique matrix used by the remapped instance.
   Columns: `atom_id_i atom_id_p1 atom_id_p2 atom_id_p3 sign_tau abs_tau delta_tau`:
   vertex `i`, its three reference vertices, and the torsion `p3-p2-p1-i`.

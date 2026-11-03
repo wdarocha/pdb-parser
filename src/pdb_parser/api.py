@@ -20,6 +20,7 @@ from pdb_parser.output_layout import (
 	parser_structure_file,
 )
 from pdb_parser.pipeline import prepare_remap_execution_context, remap_instance
+from pdb_parser.public_config import DMDGP_ORDER_TYPE, parse_public_order_type
 from pdb_parser.remap_cli_text import (
 	PARSER_STRUCTURE_REQUIRED_MESSAGE,
 )
@@ -30,7 +31,12 @@ ParserConfigValue = str | int | float
 ParserParams = dict[str, ParserConfigValue]
 BACKBONE_REMAP_ORDER_IGNORED_WARNING = (
 	"Remapping detected parser outputs with atom_selection='backbone'; "
-	"the configured order_id and order_type are ignored for this layout."
+	"the configured order_id and order_type are ignored for this layout "
+	"(use order_type: dmdgp to request its fixed N CA C order explicitly)."
+)
+DMDGP_REQUIRES_BACKBONE_MESSAGE = (
+	"order_type: dmdgp requires parser outputs with atom_selection: backbone (fixed N CA C "
+	"order); these outputs use atom_selection: backbone_plus_hydrogens."
 )
 
 
@@ -173,8 +179,12 @@ def run_remap_job(
 		)
 		nres = _validate_residue_interval(res_ids, xfile)
 
+	order_type = parse_public_order_type(remap_params)
+	if order_type == DMDGP_ORDER_TYPE and atom_layout != "backbone":
+		raise ValueError(DMDGP_REQUIRES_BACKBONE_MESSAGE)
 	if atom_layout == "backbone":
-		print_warning(BACKBONE_REMAP_ORDER_IGNORED_WARNING)
+		if order_type != DMDGP_ORDER_TYPE:
+			print_warning(BACKBONE_REMAP_ORDER_IGNORED_WARNING)
 		ddgp_order_vec = np.zeros(nres, dtype=int)
 	elif build_ddgp_order_vector_fn is build_ddgp_order_vector:
 		ddgp_order_vec = build_ddgp_order_vector_fn(

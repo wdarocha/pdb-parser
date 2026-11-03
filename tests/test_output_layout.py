@@ -30,13 +30,13 @@ def test_remapped_output_layout_matches_current_contract(tmp_path: Path) -> None
 
 	assert remapped_output_dir(out_dir, "1ABC") == out_dir / "1ABC" / "remapped"
 	assert remapped_structure_file(out_dir, "1ABC", 1, "A", 9) == (
-		out_dir / "1ABC" / "remapped" / "X_1ABC_model1_chainA_ddgp_hc_order_9.dat"
+		out_dir / "1ABC" / "remapped" / "X_1ABC_model1_chainA_ddgp_order_9.dat"
 	)
 	assert remapped_distance_file(out_dir, "1ABC", 1, "A", 9) == (
-		out_dir / "1ABC" / "remapped" / "I_1ABC_model1_chainA_ddgp_hc_order_9.dat"
+		out_dir / "1ABC" / "remapped" / "I_1ABC_model1_chainA_ddgp_order_9.dat"
 	)
 	assert remapped_clique_file(out_dir, "1ABC", 1, "A", 9) == (
-		out_dir / "1ABC" / "remapped" / "T_1ABC_model1_chainA_ddgp_hc_order_9.dat"
+		out_dir / "1ABC" / "remapped" / "T_1ABC_model1_chainA_ddgp_order_9.dat"
 	)
 
 

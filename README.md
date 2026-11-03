@@ -136,8 +136,9 @@ Publicly supported through configuration files:
   - `interval_experimental`
 - remapping `order_id` values accepted by public config:
   - `1..10`, alone or as a list of values and ranges (`1-10`, `1,3,9`)
-- remapping `order_type` values: `ddgp` (default), `redmdgp`, or both (`ddgp, redmdgp`);
-  one remap call writes every listed combination
+- remapping `order_type` values: `ddgp` (default), `redmdgp`, or both (`ddgp, redmdgp`),
+  for `backbone_plus_hydrogens`; one remap call writes every listed combination
+- `order_type: dmdgp` for `backbone` outputs: the fixed DMDGP order `N CA C`, without `order_id`
 
 Internal code paths may contain additional options for future releases, but they are not part of the supported configuration surface of this release.
 
@@ -255,7 +256,7 @@ Use those guides for command examples, positional arguments, output layout, and 
 At a high level:
 
 - `pdb-parser` reads `data/pdb_ids.txt` and `data/params.cfg`, downloads or reuses PDB files, and writes either a filtered-coordinate file (`output_mode: filtered_atoms`) or parser-stage `X_*`, `A_*`, and `I_*` files (`output_mode: parser_outputs`) under `data/outputs/<pdb_id>/`.
-- `instance-remap` reads parser-stage outputs plus `data/instance_remap.cfg`, applies one or more fixed `order_id` values (as DDGP orders or, with `order_type: redmdgp`, as iDMDGP re-orders) for `backbone_plus_hydrogens`, and writes remapped `X_*`, `I_*`, and `T_*` files under `data/outputs/<pdb_id>/remapped/`.
+- `instance-remap` reads parser-stage outputs plus `data/instance_remap.cfg`, applies one or more fixed `order_id` values (as DDGP orders or, with `order_type: redmdgp`, as iDMDGP re-orders) for `backbone_plus_hydrogens`, or the fixed DMDGP order `N CA C` for `backbone` (`order_type: dmdgp`), and writes remapped `X_*`, `I_*`, and `T_*` files under `data/outputs/<pdb_id>/remapped/`.
 - `run_pipeline.sh` orchestrates parser-only, remap-only, full, and `remap-all` executions from the source tree.
 
 The command-line tools keep processing the remaining PDB identifiers after a
@@ -277,9 +278,10 @@ therefore parser-only.
 
 For `backbone`, the remapped `T_*` uses the simplified chain rule based on the
 three previous vertices and parser angles from `A_*`. In this layout,
-`instance_remap.cfg` still selects `model_number` and `chain_id`, but
-`order_id` is ignored and the remapped outputs always use the suffix
-`*_dmdgp_order.dat`. For
+`instance_remap.cfg` still selects `model_number` and `chain_id`, the order is
+requested with `order_type: dmdgp` (no `order_id` needed), and the remapped outputs
+always use the suffix `*_dmdgp_order.dat` (step-by-step example in
+[`docs/remap_stage.md`](docs/remap_stage.md#example-the-dmdgp-order-of-backbone-outputs)). For
 `backbone_plus_hydrogens`, the existing DDGP/iDDGP clique construction remains
 in place.
 

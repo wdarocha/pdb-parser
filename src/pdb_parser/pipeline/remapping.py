@@ -33,6 +33,8 @@ from pdb_parser.output_layout import (
 )
 from pdb_parser.public_config import (
     DDGP_ORDER_TYPE,
+    DMDGP_ORDER_ID,
+    DMDGP_ORDER_TYPE,
     REDMDGP_ORDER_TYPE,
     parse_public_order_choice,
     parse_public_order_type,
@@ -220,6 +222,8 @@ def _validate_remap_tables(df_X: StructureFrame, df_I: DistanceFrame, df_A: Angu
 
 def _resolve_remap_output_order_id(params: ParserParams) -> int | str:
     """Resolve the public order choice used in remapped output filenames."""
+    if parse_public_order_type(params) == DMDGP_ORDER_TYPE and not str(params.get("order_id", "")).strip():
+        return DMDGP_ORDER_ID
     return parse_public_order_choice(str(params["order_id"]))
 
 

@@ -456,9 +456,9 @@ def test_remap_output_transaction_restores_existing_files_on_stage_failure(
 	remapped_dir = output_dir / "remapped"
 	remapped_dir.mkdir(parents=True)
 	final_paths = (
-		remapped_dir / "X_TEST_model1_chainA_ddgp_hc_order_5.dat",
-		remapped_dir / "I_TEST_model1_chainA_ddgp_hc_order_5.dat",
-		remapped_dir / "T_TEST_model1_chainA_ddgp_hc_order_5.dat",
+		remapped_dir / "X_TEST_model1_chainA_ddgp_order_5.dat",
+		remapped_dir / "I_TEST_model1_chainA_ddgp_order_5.dat",
+		remapped_dir / "T_TEST_model1_chainA_ddgp_order_5.dat",
 	)
 	for path in final_paths:
 		path.write_text(f"old-{path.name}", encoding="utf-8")

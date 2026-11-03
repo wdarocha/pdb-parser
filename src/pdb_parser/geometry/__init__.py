@@ -12,6 +12,7 @@ constraints.
 
 from .distance_geometry import (
 	distances_2_abs_torsion_angle,
+	known_torsion_sign,
 	torsion_angle_2_endpoint_distance,
 	torsion_angle_parameters,
 	torsion_angle_with_points,
@@ -19,6 +20,7 @@ from .distance_geometry import (
 
 __all__ = [
 	"distances_2_abs_torsion_angle",
+	"known_torsion_sign",
 	"torsion_angle_2_endpoint_distance",
 	"torsion_angle_parameters",
 	"torsion_angle_with_points",

@@ -67,24 +67,43 @@ PUBLIC_PARSER_PARAM_KEYS = {
 SUPPORTED_ORDER_IDS = set(range(1, 11))
 DDGP_ORDER_TYPE = "ddgp"
 REDMDGP_ORDER_TYPE = "redmdgp"
-VALID_ORDER_TYPES = {DDGP_ORDER_TYPE, REDMDGP_ORDER_TYPE}
+DMDGP_ORDER_TYPE = "dmdgp"
+VALID_ORDER_TYPES = {DDGP_ORDER_TYPE, REDMDGP_ORDER_TYPE, DMDGP_ORDER_TYPE}
+# order_type: dmdgp has a single fixed order (N CA C), so order_id is optional; this value
+# stands in for it internally and never appears in an output name.
+DMDGP_ORDER_ID = 1
 PUBLIC_REMAP_PARAM_KEYS = {"model_number", "chain_id", "order_id", "order_type"}
 
 
 def validate_public_remap_params(params: dict[str, str], path: Path) -> None:
 	"""Validate the current public remapping configuration surface."""
 	reject_unknown_keys(params, PUBLIC_REMAP_PARAM_KEYS, "remapping")
-	require_keys(params, ("model_number", "chain_id", "order_id"), path, "remapping")
+	order_types = parse_public_order_types(params)
+	required = ("model_number", "chain_id") if order_types == [DMDGP_ORDER_TYPE] else ("model_number", "chain_id", "order_id")
+	require_keys(params, required, path, "remapping")
 	parse_int_config_value(params["model_number"], "model_number", "remapping")
 	normalize_nonempty_config_value(params["chain_id"], "chain_id", "remapping")
-	parse_public_order_choices(params["order_id"])
-	parse_public_order_types(params)
+	parse_public_remap_order_choices(params)
+
+
+def parse_public_remap_order_choices(params: dict[str, str]) -> list[int]:
+	"""Return the `order_id` values of a remap configuration.
+
+	With `order_type: dmdgp` alone, `order_id` is optional (the DMDGP order is fixed); a
+	given value is still validated, then ignored.
+	"""
+	if parse_public_order_types(params) == [DMDGP_ORDER_TYPE]:
+		if str(params.get("order_id", "")).strip():
+			parse_public_order_choices(params["order_id"])
+		return [DMDGP_ORDER_ID]
+	return parse_public_order_choices(params["order_id"])
 
 
 def parse_public_order_type(params: dict[str, str]) -> str:
 	"""Return the optional `order_type` (`ddgp` by default) for the remapping stage.
 
-	`redmdgp` rewrites the same `order_id` (1 to 10) as an iDMDGP re-order.
+	`redmdgp` rewrites the same `order_id` (1 to 10) as an iDMDGP re-order; `dmdgp` requests
+	the fixed DMDGP order N CA C of `backbone` outputs.
 	"""
 	value = str(params.get("order_type", "")).strip().lower() or DDGP_ORDER_TYPE
 	if value not in VALID_ORDER_TYPES:
@@ -110,6 +129,11 @@ def parse_public_order_types(params: dict[str, str]) -> list[str]:
 			raise ValueError("order_type cannot contain an empty item in the remapping params file.")
 		if order_type not in order_types:
 			order_types.append(order_type)
+	if DMDGP_ORDER_TYPE in order_types:
+		raise ValueError(
+			"order_type: dmdgp cannot be combined with ddgp or redmdgp: it applies to backbone "
+			"outputs, the others to backbone_plus_hydrogens outputs."
+		)
 	return order_types
 
 

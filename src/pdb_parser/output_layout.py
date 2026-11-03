@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from pdb_parser.public_config import DDGP_ORDER_TYPE, REDMDGP_ORDER_TYPE
+from pdb_parser.public_config import DDGP_ORDER_TYPE, DMDGP_ORDER_TYPE, REDMDGP_ORDER_TYPE
 
 _PDB_ID_RE = re.compile(r"^[A-Z0-9]{4}$")
 
@@ -106,9 +106,11 @@ def remapped_file_suffix(
 	if atom_layout == "backbone":
 		# Backbone outputs always use the fixed DMDGP order; order_id and order_type are ignored.
 		return f"{pdb_id}_model{model_number}_chain{chain_id}_dmdgp_order.dat"
+	if order_type == DMDGP_ORDER_TYPE:
+		raise ValueError("order_type: dmdgp applies only to backbone outputs.")
 	if order_type == REDMDGP_ORDER_TYPE:
-		return f"{pdb_id}_model{model_number}_chain{chain_id}_redmdgp_order_{order_id}.dat"
-	return f"{pdb_id}_model{model_number}_chain{chain_id}_ddgp_hc_order_{order_id}.dat"
+		return f"{pdb_id}_model{model_number}_chain{chain_id}_redmdgp_hc_order_{order_id}.dat"
+	return f"{pdb_id}_model{model_number}_chain{chain_id}_ddgp_order_{order_id}.dat"
 
 
 def remapped_structure_file(

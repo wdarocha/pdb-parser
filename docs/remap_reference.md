@@ -247,10 +247,11 @@ input-surface guarantees.
 Supported `order_id` values: the fixed integers `1..10`, alone or as a list of values and
 ranges (`1-10`, `1,3,9`); one remap call writes every listed order.
 
-For `backbone`, `order_id` and `order_type` are part of the public remap
-interface only to keep the stage configuration uniform. It does not affect the remapped `X_*`, `I_*`,
-or `T_*` outputs, because this layout always uses the fixed per-residue order
-`N, CA, C` and writes `*_dmdgp_order.dat`.
+For `backbone`, the layout always uses the fixed per-residue DMDGP order
+`N, CA, C` and writes `*_dmdgp_order.dat`. Request it with `order_type: dmdgp`;
+`order_id` is then optional (checked, then ignored). With `ddgp` or `redmdgp`,
+the same files are written with a warning that `order_id` and `order_type` were
+ignored.
 
 ### Internal-residue patterns
 
@@ -270,7 +271,9 @@ or `T_*` outputs, because this layout always uses the fixed per-residue order
 Each re-order has one pattern for residue 1, one for residues 2 to `n-1`, and
 one for residue `n`. `[X]` is a new atom; a suffix marks the interval that
 places the atom from `i-3` (`ψ`, `φ` or `NOE`); no suffix means an exact
-distance or the same atom. `1` is residue `k-1` and `2` is residue `k`.
+distance or the same atom. `1` is residue `k-1` and `2` is residue `k`. A copy
+(no brackets) is tied to its previous occurrence by one `[0, 0]` in `I_*`, so a
+suffix on a copy does not branch the search (see `docs/remap_stage.md`).
 
 | order | residues 2 to n-1 |
 |---|---|
@@ -286,13 +289,13 @@ distance or the same atom. `1` is residue `k-1` and `2` is residue `k`.
 | 10 | `[HN2]NOE [CA2] C1 [N2] CA2 [C2]φ [HA2] CA2 C2` |
 
 Residue `n` uses the same pattern cut after its last new atom. Residue 1
-depends on the N-terminal hydrogens (`n1 n2 n3` in the order of the first-residue
-pattern) and on the order:
+depends on the N-terminal hydrogens (`h1 h2 h3`: positions in the order of the
+first-residue pattern, not the atom names `H1 H2 H3`) and on the order:
 
 | N terminus | orders 1 to 6 | orders 7 to 10 |
 |---|---|---|
-| three hydrogens | `n1 n2 n3 N CA [HA]NOE N CA C` | `n1 n2 n3 N CA [HA]NOE C CA` |
-| two hydrogens | `n1 n2 N CA [HA]NOE N CA C` | `n1 n2 N CA [HA]NOE C CA` |
+| three hydrogens | `h1 h2 h3 N CA [HA]NOE N CA C` | `h1 h2 h3 N CA [HA]NOE C CA` |
+| two hydrogens | `h1 h2 N CA [HA]NOE N CA C` | `h1 h2 N CA [HA]NOE C CA` |
 | one hydrogen | `N CA C HA N CA [H]NOE N CA HA·NOE N CA C` | `N CA C HA N CA [H]NOE N CA HA·NOE C CA` |
 
 The H--H pairs these patterns rely on (`HN_i--HA_i` and `HA_{i-1}--HN_i`) are
@@ -302,11 +305,11 @@ never discarded by `percentage_hh_distance_constraints`.
 
 The remapping stage writes:
 
-- `X_*_ddgp_hc_order_<order_id>.dat`
-- `I_*_ddgp_hc_order_<order_id>.dat`
-- `T_*_ddgp_hc_order_<order_id>.dat`
+- `X_*_ddgp_order_<order_id>.dat`
+- `I_*_ddgp_order_<order_id>.dat`
+- `T_*_ddgp_order_<order_id>.dat`
 
-With `order_type: redmdgp`, the suffix is `*_redmdgp_order_<order_id>.dat`.
+With `order_type: redmdgp`, the suffix is `*_redmdgp_hc_order_<order_id>.dat`.
 
 For the `backbone` layout, the suffix is always `*_dmdgp_order.dat`.
 

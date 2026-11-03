@@ -164,6 +164,15 @@ def sign_torsion_angle(
 	return float(np.sign(np.dot(normal_plane, direction)))
 
 
+def known_torsion_sign(value: float) -> float:
+	"""Return the sign column of a known torsion: -1 or +1, and +1 for a torsion of 0.
+
+	Both signs of a zero torsion give the same point; a nonzero sign marks it as known (0 in
+	a T file means an unknown sign).
+	"""
+	return -1.0 if value < 0 else 1.0
+
+
 def torsion_angle_with_points(
 	x1: Point,
 	x2: Point,

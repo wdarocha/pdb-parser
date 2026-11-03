@@ -45,7 +45,9 @@ def test_order_id_lists_are_validated(raw: str, message: str) -> None:
 def test_order_type_accepts_a_comma_separated_list() -> None:
 	assert parse_public_order_types({}) == ["ddgp"]
 	assert parse_public_order_types({"order_type": "ddgp, REDMDGP, ddgp"}) == ["ddgp", "redmdgp"]
-	with pytest.raises(ValueError, match="Invalid order_type 'dmdgp'"):
+	with pytest.raises(ValueError, match="Invalid order_type 'ddmgp'"):
+		parse_public_order_types({"order_type": "ddgp, ddmgp"})
+	with pytest.raises(ValueError, match="dmdgp cannot be combined"):
 		parse_public_order_types({"order_type": "ddgp, dmdgp"})
 	validate_public_remap_params({**BASE, "order_id": "1-10", "order_type": "ddgp, redmdgp"}, Path("x.cfg"))
 
@@ -109,3 +111,54 @@ def test_backbone_outputs_are_written_once_for_any_number_of_orders(
 		"X_TEST_model1_chainA_dmdgp_order.dat",
 	]
 	assert capsys.readouterr().err.count("order_id and order_type are ignored") == 1
+
+
+def test_order_type_dmdgp_makes_order_id_optional() -> None:
+	validate_public_remap_params({**BASE, "order_type": "dmdgp"}, Path("x.cfg"))
+	validate_public_remap_params({**BASE, "order_type": "dmdgp", "order_id": "9"}, Path("x.cfg"))
+	with pytest.raises(ValueError, match="Invalid order_id"):
+		validate_public_remap_params({**BASE, "order_type": "dmdgp", "order_id": "11"}, Path("x.cfg"))
+	with pytest.raises(ValueError, match="order_id"):
+		validate_public_remap_params({**BASE, "order_type": "ddgp"}, Path("x.cfg"))
+
+
+def _run_remap_cli(tmp_path: Path, out_dir: Path, config: str) -> int:
+	from pdb_parser import instance_remap
+
+	ids = tmp_path / "ids.txt"
+	ids.write_text("TEST\n", encoding="utf-8")
+	cfg = tmp_path / "remap.cfg"
+	cfg.write_text(config, encoding="utf-8")
+	return instance_remap.main([str(ids), str(cfg), str(out_dir)])
+
+
+def test_order_type_dmdgp_writes_the_backbone_order_without_warning(
+	tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+	_write_fixture(tmp_path / "pdb", ("H1", "H2", "H3"))
+	out_dir = _parse(tmp_path, atom_selection="backbone")
+
+	assert _run_remap_cli(tmp_path, out_dir, "model_number: 1\nchain_id: A\norder_type: dmdgp\n") == 0
+	explicit = _remapped_files(out_dir)
+	assert "order_id and order_type are ignored" not in capsys.readouterr().err
+
+	shutil.rmtree(out_dir / "TEST" / "remapped")
+	assert _run_remap_cli(tmp_path, out_dir, "model_number: 1\nchain_id: A\norder_id: 9\n") == 0
+	assert "use order_type: dmdgp" in capsys.readouterr().err
+	assert sorted(explicit) == [
+		"I_TEST_model1_chainA_dmdgp_order.dat",
+		"T_TEST_model1_chainA_dmdgp_order.dat",
+		"X_TEST_model1_chainA_dmdgp_order.dat",
+	]
+	assert _remapped_files(out_dir) == explicit
+
+
+def test_order_type_dmdgp_is_rejected_for_backbone_plus_hydrogens_outputs(
+	tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+	_write_fixture(tmp_path / "pdb", ("H1", "H2", "H3"))
+	out_dir = _parse(tmp_path)
+
+	assert _run_remap_cli(tmp_path, out_dir, "model_number: 1\nchain_id: A\norder_type: dmdgp\n") == 1
+	assert "order_type: dmdgp requires parser outputs with atom_selection: backbone" in capsys.readouterr().out
+	assert not (out_dir / "TEST" / "remapped").exists() or not list((out_dir / "TEST" / "remapped").iterdir())

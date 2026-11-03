@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from pdb_parser.api import run_remap_job
+from pdb_parser.geometry import torsion_angle_with_points
 from pdb_parser.io.files import read_space_separated_file
 from pdb_parser.output_layout import (
     parser_distance_file,
@@ -73,12 +74,12 @@ def test_order_type_is_optional_and_validated() -> None:
     assert parse_public_order_type({"order_id": "3"}) == "ddgp"
     assert parse_public_order_type({"order_id": "3", "order_type": " REDMDGP "}) == "redmdgp"
     with pytest.raises(ValueError, match="Invalid order_type"):
-        parse_public_order_type({"order_id": "3", "order_type": "dmdgp"})
+        parse_public_order_type({"order_id": "3", "order_type": "ddmgp"})
 
 
 def test_redmdgp_outputs_have_their_own_suffix() -> None:
     assert remapped_file_suffix("1abc", 1, "A", 7, "backbone_plus_hydrogens", "redmdgp") == (
-        "1ABC_model1_chainA_redmdgp_order_7.dat"
+        "1ABC_model1_chainA_redmdgp_hc_order_7.dat"
     )
     # Backbone outputs keep the fixed DMDGP order: order_type is ignored like order_id.
     assert remapped_file_suffix("1abc", 1, "A", 7, "backbone", "redmdgp") == "1ABC_model1_chainA_dmdgp_order.dat"
@@ -161,6 +162,29 @@ def test_redmdgp_remap_writes_a_consistent_reorder_for_every_order(
             assert (t_rows[column].to_numpy()[3:] == np.arange(4, n + 1) - column).all()
         first_residue = [atom for position, atom in sorted(atom_at.items()) if atom[0] == 1]
         assert len(set(first_residue)) == first_residue_atoms
+        # Every copy has four predecessors with exactly one [0, 0], with the previous occurrence
+        # of its atom; they are all exact except i-3 when it is an interval (the zero is then
+        # the extra row). A torsion of 0 and a phi/psi window (also with its end atoms swapped)
+        # have a known sign, and a known sign contains the reference torsion.
+        rows_of = {}
+        for i, j, d_l, d_u in zip(i_rows[0], i_rows[1], i_rows[4], i_rows[5], strict=True):
+            rows_of.setdefault(i, {})[j] = (d_l, d_u)
+        previous = {}
+        for k, (sign, abs_tau, delta) in enumerate(t_rows[[4, 5, 6]].itertuples(index=False, name=None), 1):
+            zeros = [j for j, (d_l, d_u) in rows_of.get(k, {}).items() if d_u == 0.0]
+            assert zeros == ([previous[atom_at[k]]] if atom_at[k] in previous else []), (order_id, k)
+            if atom_at[k] in previous:
+                rows = rows_of[k]
+                assert len(rows) == 4, (order_id, k, rows)
+                assert all(d_l == d_u for j, (d_l, d_u) in rows.items() if j != k - 3 or k - 3 in zeros), (order_id, k)
+            previous[atom_at[k]] = k
+            if k < 4:
+                continue
+            assert sign != 0 or delta > 0, (order_id, k)
+            if sign != 0:
+                native = np.degrees(torsion_angle_with_points(*(xyz[v - 1] for v in (k - 3, k - 2, k - 1, k))))
+                gap = abs((native - sign * abs_tau + 180.0) % 360.0 - 180.0)
+                assert gap <= delta + 1e-6, (order_id, k, native, sign, abs_tau, delta)
 
 
 def test_redmdgp_is_ignored_for_backbone_outputs(tmp_path: Path) -> None:

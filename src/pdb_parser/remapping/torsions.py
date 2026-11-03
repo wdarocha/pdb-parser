@@ -5,7 +5,11 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from pdb_parser.geometry import distances_2_abs_torsion_angle, torsion_angle_with_points
+from pdb_parser.geometry import (
+    distances_2_abs_torsion_angle,
+    known_torsion_sign,
+    torsion_angle_with_points,
+)
 
 from .contracts import AtomLookup, CliqueMatrixEntry, IntervalBounds, IntervalLookup
 
@@ -55,7 +59,7 @@ def update_torsion_matrix(
                 coordinates[atom_4 - 1], coordinates[atom_3 - 1],
                 coordinates[atom_2 - 1], coordinates[atom_1 - 1],
             )
-            T[row_index, 4:6] = (np.sign(tau), np.abs(tau) * 180.0 / np.pi)
+            T[row_index, 4:6] = (known_torsion_sign(tau), np.abs(tau) * 180.0 / np.pi)
         elif clique_type == 2:
             try:
                 d14l, d14u = get_interval_dl_du(atom_1, atom_4, intervals)
@@ -91,7 +95,7 @@ def update_torsion_matrix(
                 source -= 1
             value = angles[source, columns[0]]
             delta = angles[source, columns[1]]
-            T[row_index, 4:7] = (np.sign(value), np.abs(value), delta)
+            T[row_index, 4:7] = (known_torsion_sign(value), np.abs(value), delta)
         else:
             raise ValueError(
                 f"Unsupported clique type {clique_type} at row {row_index}. "
@@ -168,6 +172,6 @@ def build_backbone_torsion_matrix(
             )
         value = float(angle_rows[source][value_column])
         matrix[index, 4:7] = (
-            np.sign(value), np.abs(value), float(angle_rows[source][delta_column])
+            known_torsion_sign(value), np.abs(value), float(angle_rows[source][delta_column])
         )
     return matrix
